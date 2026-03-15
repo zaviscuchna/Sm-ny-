@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import bcrypt from 'bcryptjs'
 
 export async function POST(req: NextRequest) {
-  const { email } = await req.json()
+  const { email, password } = await req.json()
 
   const client = await pool.connect()
   try {
@@ -13,6 +14,14 @@ export async function POST(req: NextRequest) {
     if (userRes.rows.length === 0) return NextResponse.json(null)
 
     const user = userRes.rows[0]
+
+    // Verify password
+    if (user.password_hash) {
+      const ok = await bcrypt.compare(password ?? '', user.password_hash)
+      if (!ok) return NextResponse.json({ error: 'Špatné heslo.' }, { status: 401 })
+    }
+    // If no password_hash (legacy account) — allow login without password
+
     const bizRes = await client.query(
       'SELECT * FROM "Business" WHERE id = $1',
       [user.business_id]

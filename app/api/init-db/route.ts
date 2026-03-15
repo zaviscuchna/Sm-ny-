@@ -66,10 +66,9 @@ export async function GET(req: NextRequest) {
         "notes"         TEXT
       )
     `)
-    // Add positions column if it doesn't exist yet (idempotent migration)
-    await client.query(`
-      ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'
-    `)
+    // Idempotent migrations for new columns
+    await client.query(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'`)
+    await client.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS password_hash TEXT`)
     return NextResponse.json({ ok: true, message: 'Tabulky vytvořeny.' })
   } catch (e: any) {
     return NextResponse.json({ error: 'Query failed', detail: e.message }, { status: 500 })

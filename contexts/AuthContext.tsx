@@ -26,6 +26,7 @@ function getRegisteredBiz(): (Business & { joinCode?: string })[] {
 interface RegisterData {
   name: string
   email: string
+  password: string
   businessName?: string
   location?: string
   joinCode?: string
@@ -38,7 +39,7 @@ interface AuthContextType {
   loading:        boolean
   activeBusiness: Business | null
   joinCode:       string | null
-  login:          (email: string) => Promise<AuthResult>
+  login:          (email: string, password: string) => Promise<AuthResult>
   register:       (type: 'manager' | 'employee', data: RegisterData) => Promise<AuthResult>
   logout:         () => void
   switchBusiness: (bizId: string) => void
@@ -81,10 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── login ──────────────────────────────────────────────────────────────────
 
-  const login = async (email: string): Promise<AuthResult> => {
-    // 1. Check mock users
+  const login = async (email: string, password: string): Promise<AuthResult> => {
+    // 1. Check mock users (demo — accept password '123456')
     const mockUser = ALL_USERS.find(u => u.email.toLowerCase() === email.toLowerCase())
     if (mockUser) {
+      if (password !== '123456') return { success: false, error: 'Špatné heslo.' }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser))
       setUser(mockUser)
       if (mockUser.role === 'superadmin') {
@@ -112,8 +114,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/auth/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email }),
+        body:    JSON.stringify({ email, password }),
       })
+      if (res.status === 401) {
+        const data = await res.json()
+        return { success: false, error: data.error ?? 'Špatné heslo.' }
+      }
       const data = await res.json()
       if (data) {
         const newUser: User = {
@@ -186,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch('/api/auth/register', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ type, ...data }),
+        body:    JSON.stringify({ type, ...data, password: data.password }),
       })
       const result = await res.json()
 

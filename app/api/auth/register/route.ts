@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import bcrypt from 'bcryptjs'
 
 const AVATAR_COLORS = ['#6366f1','#f59e0b','#10b981','#ec4899','#3b82f6','#8b5cf6','#14b8a6','#f97316']
 const randomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
 
 export async function POST(req: NextRequest) {
-  const { type, name, email, businessName, location, joinCode } = await req.json()
+  const { type, name, email, password, businessName, location, joinCode } = await req.json()
+
+  if (!password || password.length < 6) {
+    return NextResponse.json({ error: 'Heslo musí mít alespoň 6 znaků.' }, { status: 400 })
+  }
 
   const client = await pool.connect()
   try {
@@ -17,6 +22,8 @@ export async function POST(req: NextRequest) {
     if (existing.rows.length > 0) {
       return NextResponse.json({ error: 'Tento e-mail je již registrován.' }, { status: 400 })
     }
+
+    const passwordHash = await bcrypt.hash(password, 12)
 
     let bizId: string
     let bizName: string
@@ -53,8 +60,8 @@ export async function POST(req: NextRequest) {
     const role   = type === 'manager' ? 'manager' : 'employee'
 
     await client.query(
-      'INSERT INTO "User" (id, name, email, role, color, business_id) VALUES ($1,$2,$3,$4,$5,$6)',
-      [userId, name, email.toLowerCase(), role, color, bizId]
+      'INSERT INTO "User" (id, name, email, role, color, business_id, password_hash) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [userId, name, email.toLowerCase(), role, color, bizId, passwordHash]
     )
 
     return NextResponse.json({

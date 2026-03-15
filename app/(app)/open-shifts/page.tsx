@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { useAuth } from '@/contexts/AuthContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { SHIFTS, SHIFT_APPLICATIONS } from '@/lib/mock-data'
+import { isRegistered } from '@/lib/db'
 import { parseISO } from 'date-fns'
 import type { Shift, ShiftApplication } from '@/types'
 import { Clock, Calendar, Briefcase, CheckCircle2, XCircle, UserPlus, ChevronDown, ChevronUp } from 'lucide-react'
@@ -21,12 +22,25 @@ function getDuration(start: string, end: string) {
 }
 
 export default function OpenShiftsPage() {
-  const { user } = useAuth()
+  const { user, activeBusiness } = useAuth()
   const isManager = user?.role === 'manager'
 
-  const [openShifts, setOpenShifts] = useState(SHIFTS.filter(s => s.status === 'open'))
-  const [apps, setApps] = useState<ShiftApplication[]>(SHIFT_APPLICATIONS)
+  const [openShifts, setOpenShifts] = useState<Shift[]>([])
+  const [apps, setApps] = useState<ShiftApplication[]>([])
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!activeBusiness) return
+    if (isRegistered(activeBusiness.id)) {
+      fetch(`/api/shifts?bizId=${activeBusiness.id}`)
+        .then(r => r.json())
+        .then((shifts: Shift[]) => setOpenShifts(shifts.filter(s => s.status === 'open')))
+        .catch(() => {})
+    } else {
+      setOpenShifts(SHIFTS.filter(s => s.status === 'open'))
+      setApps(SHIFT_APPLICATIONS)
+    }
+  }, [activeBusiness?.id])
   const [expandedShift, setExpandedShift] = useState<string | null>(null)
 
   const handleApply = (shift: Shift) => {
