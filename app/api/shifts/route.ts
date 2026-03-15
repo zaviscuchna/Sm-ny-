@@ -1,54 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { pool } from '@/lib/postgres'
 
 export async function GET(req: NextRequest) {
   const bizId = req.nextUrl.searchParams.get('bizId')
   if (!bizId) return NextResponse.json([], { status: 400 })
 
-  const [shiftRows, empRows] = await Promise.all([
-    prisma.shift.findMany({ where: { business_id: bizId }, orderBy: { date: 'asc' } }),
-    prisma.user.findMany({ where: { business_id: bizId } }),
-  ])
+  const client = await pool.connect()
+  try {
+    const [shiftsRes, empsRes] = await Promise.all([
+      client.query('SELECT * FROM "Shift" WHERE business_id = $1 ORDER BY date', [bizId]),
+      client.query('SELECT * FROM "User" WHERE business_id = $1', [bizId]),
+    ])
 
-  const empMap: Record<string, typeof empRows[0]> = {}
-  for (const e of empRows) empMap[e.id] = e
+    const empMap: Record<string, any> = {}
+    for (const e of empsRes.rows) empMap[e.id] = e
 
-  const shifts = shiftRows.map(row => ({
-    id:               row.id,
-    businessId:       row.business_id,
-    date:             row.date,
-    startTime:        row.start_time,
-    endTime:          row.end_time,
-    roleNeeded:       row.role_needed,
-    status:           row.status,
-    notes:            row.notes ?? undefined,
-    assignedEmployee: row.assigned_employee_id
-      ? (() => {
-          const e = empMap[row.assigned_employee_id]
-          return e ? { id: e.id, name: e.name, email: e.email, role: e.role, color: e.color } : undefined
-        })()
-      : undefined,
-  }))
+    const shifts = shiftsRes.rows.map(row => ({
+      id:               row.id,
+      businessId:       row.business_id,
+      date:             row.date,
+      startTime:        row.start_time,
+      endTime:          row.end_time,
+      roleNeeded:       row.role_needed,
+      status:           row.status,
+      notes:            row.notes ?? undefined,
+      assignedEmployee: row.assigned_employee_id
+        ? (() => {
+            const e = empMap[row.assigned_employee_id]
+            return e ? { id: e.id, name: e.name, email: e.email, role: e.role, color: e.color } : undefined
+          })()
+        : undefined,
+    }))
 
-  return NextResponse.json(shifts)
+    return NextResponse.json(shifts)
+  } finally {
+    client.release()
+  }
 }
 
 export async function POST(req: NextRequest) {
   const { shifts } = await req.json()
-
-  await prisma.shift.createMany({
-    data: shifts.map((s: any) => ({
-      id:                   s.id,
-      business_id:          s.businessId,
-      date:                 s.date,
-      start_time:           s.startTime,
-      end_time:             s.endTime,
-      role_needed:          s.roleNeeded,
-      assigned_employee_id: s.assignedEmployeeId ?? null,
-      status:               s.status,
-      notes:                s.notes ?? null,
-    })),
-  })
-
-  return NextResponse.json({ ok: true })
+  const client = await pool.connect()
+  try {
+    for (const s of shifts) {
+      await client.query(
+        `INSERT INTO "Shift" (id, business_id, date, start_time, end_time, role_needed, assigned_employee_id, status, notes)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [s.id, s.businessId, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null]
+      )
+    }
+    return NextResponse.json({ ok: true })
+  } finally {
+    client.release()
+  }
 }

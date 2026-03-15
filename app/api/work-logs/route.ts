@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { pool } from '@/lib/postgres'
 
 function calcHours(clockIn: string, clockOut: string): number {
   const [ih, im] = clockIn.split(':').map(Number)
@@ -11,34 +11,32 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const bizId      = searchParams.get('bizId')
   const employeeId = searchParams.get('employeeId')
-  const month      = searchParams.get('month') // "yyyy-MM"
+  const month      = searchParams.get('month')
 
   if (!bizId) return NextResponse.json([], { status: 400 })
 
-  if (employeeId) {
-    // Employee logs
-    const rows = await prisma.workLog.findMany({
-      where: { employee_id: employeeId, business_id: bizId },
-      orderBy: { date: 'desc' },
-    })
-    return NextResponse.json(rows.map(rowToLog))
+  const client = await pool.connect()
+  try {
+    let res
+    if (employeeId) {
+      res = await client.query(
+        'SELECT * FROM "WorkLog" WHERE employee_id = $1 AND business_id = $2 ORDER BY date DESC',
+        [employeeId, bizId]
+      )
+    } else if (month) {
+      const [y, m] = month.split('-').map(Number)
+      const nextM = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+      res = await client.query(
+        `SELECT * FROM "WorkLog" WHERE business_id = $1 AND date >= $2 AND date < $3 ORDER BY date DESC`,
+        [bizId, `${month}-01`, `${nextM}-01`]
+      )
+    } else {
+      return NextResponse.json([])
+    }
+    return NextResponse.json(res.rows.map(rowToLog))
+  } finally {
+    client.release()
   }
-
-  if (month) {
-    // Business monthly logs
-    const [y, m] = month.split('-').map(Number)
-    const nextM = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
-    const rows = await prisma.workLog.findMany({
-      where: {
-        business_id: bizId,
-        date: { gte: `${month}-01`, lt: `${nextM}-01` },
-      },
-      orderBy: { date: 'desc' },
-    })
-    return NextResponse.json(rows.map(rowToLog))
-  }
-
-  return NextResponse.json([])
 }
 
 export async function POST(req: NextRequest) {
@@ -46,28 +44,29 @@ export async function POST(req: NextRequest) {
   const id    = `wl-${Date.now()}`
   const hours = calcHours(log.clockIn, log.clockOut)
 
-  await prisma.workLog.create({
-    data: {
-      id,
-      employee_id:   log.employeeId,
-      employee_name: log.employeeName,
-      business_id:   bizId,
-      date:          log.date,
-      clock_in:      log.clockIn,
-      clock_out:     log.clockOut,
-      hours,
-      notes:         log.notes ?? null,
-    },
-  })
-
-  return NextResponse.json({ id, hours, ...log })
+  const client = await pool.connect()
+  try {
+    await client.query(
+      `INSERT INTO "WorkLog" (id, employee_id, employee_name, business_id, date, clock_in, clock_out, hours, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, log.employeeId, log.employeeName, bizId, log.date, log.clockIn, log.clockOut, hours, log.notes ?? null]
+    )
+    return NextResponse.json({ id, hours, ...log })
+  } finally {
+    client.release()
+  }
 }
 
 export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false }, { status: 400 })
-  await prisma.workLog.delete({ where: { id } })
-  return NextResponse.json({ ok: true })
+  const client = await pool.connect()
+  try {
+    await client.query('DELETE FROM "WorkLog" WHERE id = $1', [id])
+    return NextResponse.json({ ok: true })
+  } finally {
+    client.release()
+  }
 }
 
 function rowToLog(row: any) {

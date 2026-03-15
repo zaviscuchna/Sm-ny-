@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { pool } from '@/lib/postgres'
 
 export async function GET(req: NextRequest) {
   const bizId = req.nextUrl.searchParams.get('bizId')
   if (!bizId) return NextResponse.json([], { status: 400 })
 
-  const rows = await prisma.user.findMany({
-    where: { business_id: bizId },
-    orderBy: { name: 'asc' },
-  })
-
-  const employees = rows.map(r => ({
-    id:    r.id,
-    name:  r.name,
-    email: r.email,
-    role:  r.role,
-    color: r.color,
-    phone: r.phone ?? undefined,
-  }))
-
-  return NextResponse.json(employees)
+  const client = await pool.connect()
+  try {
+    const res = await client.query(
+      'SELECT * FROM "User" WHERE business_id = $1 ORDER BY name',
+      [bizId]
+    )
+    const employees = res.rows.map(r => ({
+      id:    r.id,
+      name:  r.name,
+      email: r.email,
+      role:  r.role,
+      color: r.color,
+      phone: r.phone ?? undefined,
+    }))
+    return NextResponse.json(employees)
+  } finally {
+    client.release()
+  }
 }
