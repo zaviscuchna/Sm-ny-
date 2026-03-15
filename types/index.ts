@@ -18,6 +18,7 @@ export interface Business {
   id: string
   name: string
   location: string
+  positions?: string[]
 }
 
 export interface Shift {

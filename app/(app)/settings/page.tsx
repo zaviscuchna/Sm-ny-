@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Copy, Check, Building2, User, ShieldCheck, LogOut } from 'lucide-react'
+import { Copy, Check, Building2, User, ShieldCheck, LogOut, Briefcase, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
@@ -15,11 +15,47 @@ export default function SettingsPage() {
   const { user, activeBusiness, joinCode: ctxJoinCode, logout } = useAuth()
   const router = useRouter()
   const [copied, setCopied] = useState(false)
+  const [positions, setPositions] = useState<string[]>([])
+  const [newPos, setNewPos] = useState('')
+  const [savingPos, setSavingPos] = useState(false)
+
+  useEffect(() => {
+    if (!activeBusiness?.id.startsWith('biz-reg-')) return
+    fetch(`/api/business?bizId=${activeBusiness.id}`)
+      .then(r => r.json())
+      .then(d => { if (d.positions) setPositions(d.positions) })
+      .catch(() => {})
+  }, [activeBusiness?.id])
 
   const isNewBusiness = activeBusiness?.id.startsWith('biz-reg-')
   // Use join code from context (real code for Supabase businesses) or derive from id for demo
   const joinCode = ctxJoinCode
     ?? (activeBusiness ? activeBusiness.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '111111' : '111111')
+
+  const addPosition = () => {
+    const p = newPos.trim()
+    if (!p || positions.includes(p)) return
+    setPositions(prev => [...prev, p])
+    setNewPos('')
+  }
+
+  const removePosition = (p: string) => setPositions(prev => prev.filter(x => x !== p))
+
+  const savePositions = async () => {
+    if (!activeBusiness) return
+    setSavingPos(true)
+    try {
+      await fetch('/api/business', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bizId: activeBusiness.id, positions }),
+      })
+      toast.success('Pozice uloženy')
+    } catch {
+      toast.error('Chyba při ukládání')
+    }
+    setSavingPos(false)
+  }
 
   const copyCode = () => {
     navigator.clipboard.writeText(joinCode).then(() => {
@@ -112,6 +148,51 @@ export default function SettingsPage() {
               {!isNewBusiness && (
                 <p className="text-xs text-slate-400">Demo podnik · úpravy jsou dostupné v placené verzi.</p>
               )}
+            </div>
+          </section>
+        )}
+
+        {/* Positions */}
+        {user?.role === 'manager' && isNewBusiness && (
+          <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 bg-slate-50/60">
+              <Briefcase className="w-4 h-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-slate-700">Pracovní pozice</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-500">Přidej pozice které budou dostupné při vytváření směn.</p>
+
+              <div className="flex flex-wrap gap-2 min-h-[2rem]">
+                {positions.length === 0 && (
+                  <p className="text-xs text-slate-400 italic">Zatím žádné pozice — přidej první níže.</p>
+                )}
+                {positions.map(p => (
+                  <span key={p} className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 text-sm font-medium rounded-full border border-indigo-100">
+                    {p}
+                    <button onClick={() => removePosition(p)} className="text-indigo-400 hover:text-indigo-700 transition-colors">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Název pozice (např. Barista, Kuchař…)"
+                  value={newPos}
+                  onChange={e => setNewPos(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addPosition()}
+                  className="border-slate-200"
+                />
+                <Button variant="outline" onClick={addPosition} className="shrink-0 gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+                  <Plus className="w-4 h-4" />
+                  Přidat
+                </Button>
+              </div>
+
+              <Button onClick={savePositions} disabled={savingPos} className="bg-indigo-600 hover:bg-indigo-700">
+                {savingPos ? 'Ukládám…' : 'Uložit pozice'}
+              </Button>
             </div>
           </section>
         )}

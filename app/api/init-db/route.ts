@@ -66,6 +66,10 @@ export async function GET(req: NextRequest) {
         "notes"         TEXT
       )
     `)
+    // Add positions column if it doesn't exist yet (idempotent migration)
+    await client.query(`
+      ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'
+    `)
     return NextResponse.json({ ok: true, message: 'Tabulky vytvořeny.' })
   } catch (e: any) {
     return NextResponse.json({ error: 'Query failed', detail: e.message }, { status: 500 })

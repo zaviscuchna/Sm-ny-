@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format, addDays, parseISO, getISODay } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { Plus, Repeat } from 'lucide-react'
@@ -77,6 +77,17 @@ function generateRepeatDates(
 export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsCreated }: Props) {
   const { activeBusiness } = useAuth()
   const [open, setOpen] = useState(false)
+  const [businessPositions, setBusinessPositions] = useState<string[] | null>(null)
+
+  useEffect(() => {
+    if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    fetch(`/api/business?bizId=${activeBusiness.id}`)
+      .then(r => r.json())
+      .then(d => { if (d.positions?.length) setBusinessPositions(d.positions) })
+      .catch(() => {})
+  }, [activeBusiness?.id])
+
+  const roleOptions = businessPositions ?? ROLES
 
   // Base fields
   const [date,       setDate]       = useState(defaultDate ?? format(new Date(), 'yyyy-MM-dd'))
@@ -210,7 +221,7 @@ export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsC
                 <SelectValue placeholder="Vyber pozici…" />
               </SelectTrigger>
               <SelectContent>
-                {ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                {roleOptions.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 <SelectItem value="__custom">Vlastní…</SelectItem>
               </SelectContent>
             </Select>
