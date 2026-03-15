@@ -1,17 +1,18 @@
 'use client'
 
-import { useState } from 'react'
-import { format, isAfter, parseISO } from 'date-fns'
+import { useState, useEffect } from 'react'
+import { format, parseISO } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { useAuth } from '@/contexts/AuthContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { WelcomeModal } from '@/components/shared/WelcomeModal'
 import { SHIFTS, OPEN_SHIFTS } from '@/lib/mock-data'
-import type { Shift, ShiftApplication } from '@/types'
-import { Calendar, Clock, CheckCircle2, UserPlus, Star } from 'lucide-react'
+import { saveWorkLog, deleteWorkLog, getEmployeeLogs, sumHours } from '@/lib/work-logs'
+import type { WorkLog } from '@/lib/work-logs'
+import type { Shift } from '@/types'
+import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 
 function getDuration(start: string, end: string) {
@@ -34,6 +35,59 @@ export default function MyShiftsPage() {
 
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
   const [confirmedShifts, setConfirmedShifts] = useState<Set<string>>(new Set())
+
+  // ─── Work log state ──────────────────────────────────────────────────────────
+  const [logs, setLogs] = useState<WorkLog[]>([])
+  const [logDate, setLogDate] = useState(todayStr)
+  const [clockIn, setClockIn] = useState('')
+  const [clockOut, setClockOut] = useState('')
+  const [logNotes, setLogNotes] = useState('')
+  const [logMonth, setLogMonth] = useState(format(new Date(), 'yyyy-MM'))
+
+  useEffect(() => {
+    if (user?.id) setLogs(getEmployeeLogs(user.id))
+  }, [user?.id])
+
+  const monthLogs = logs.filter(l => l.date.startsWith(logMonth))
+  const monthTotal = sumHours(monthLogs)
+
+  const prevMonth = () => {
+    const [y, m] = logMonth.split('-').map(Number)
+    const d = new Date(y, m - 2, 1)
+    setLogMonth(format(d, 'yyyy-MM'))
+  }
+  const nextMonth = () => {
+    const [y, m] = logMonth.split('-').map(Number)
+    const d = new Date(y, m, 1)
+    if (d <= new Date()) setLogMonth(format(d, 'yyyy-MM'))
+  }
+
+  const handleLogSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!clockIn || !clockOut) { toast.error('Vyplň čas příchodu i odchodu'); return }
+    const [ih, im] = clockIn.split(':').map(Number)
+    const [oh, om] = clockOut.split(':').map(Number)
+    if ((oh + om / 60) <= (ih + im / 60)) { toast.error('Čas odchodu musí být po příchodu'); return }
+    const log = saveWorkLog({
+      employeeId: user!.id,
+      employeeName: user!.name,
+      date: logDate,
+      clockIn,
+      clockOut,
+      notes: logNotes || undefined,
+    })
+    setLogs(prev => [log, ...prev])
+    setClockIn('')
+    setClockOut('')
+    setLogNotes('')
+    toast.success(`Záznam uložen — ${log.hours}h`)
+  }
+
+  const handleDeleteLog = (id: string) => {
+    deleteWorkLog(id)
+    setLogs(prev => prev.filter(l => l.id !== id))
+    toast.success('Záznam smazán')
+  }
 
   const handleApply = (shift: Shift) => {
     setAppliedShifts(prev => new Set(prev).add(shift.id))
@@ -152,6 +206,129 @@ export default function MyShiftsPage() {
               })}
             </div>
           )}
+        </section>
+
+        {/* Work logging */}
+        <section>
+          <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-indigo-500" />
+            Záznamy práce
+          </h2>
+
+          {/* Add new log form */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-4">
+            <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" /> Přidat záznam
+            </p>
+            <form onSubmit={handleLogSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Datum</label>
+                  <input
+                    type="date"
+                    value={logDate}
+                    max={todayStr}
+                    onChange={e => setLogDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Příchod</label>
+                    <input
+                      type="time"
+                      value={clockIn}
+                      onChange={e => setClockIn(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Odchod</label>
+                    <input
+                      type="time"
+                      value={clockOut}
+                      onChange={e => setClockOut(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Poznámka (nepovinné)</label>
+                <input
+                  type="text"
+                  placeholder="např. přesčas, zastupování..."
+                  value={logNotes}
+                  onChange={e => setLogNotes(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+              <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white w-full rounded-xl">
+                Uložit záznam
+              </Button>
+            </form>
+          </div>
+
+          {/* Month selector + history */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
+              <div className="flex items-center gap-2">
+                <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <p className="text-xs font-semibold text-slate-700 capitalize min-w-[90px] text-center">
+                  {format(new Date(logMonth + '-01'), 'LLLL yyyy', { locale: cs })}
+                </p>
+                <button
+                  onClick={nextMonth}
+                  disabled={logMonth >= format(new Date(), 'yyyy-MM')}
+                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-400">Celkem</p>
+                <p className="text-sm font-bold text-indigo-600">{monthTotal}h</p>
+              </div>
+            </div>
+
+            {monthLogs.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-slate-400">
+                Žádné záznamy za tento měsíc.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-50">
+                {monthLogs.map(log => (
+                  <div key={log.id} className="flex items-center gap-3 px-5 py-3">
+                    <div className="flex-shrink-0 text-center w-10">
+                      <p className="text-lg font-black text-slate-800 leading-none">
+                        {format(parseISO(log.date), 'd')}
+                      </p>
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase">
+                        {format(parseISO(log.date), 'EEE', { locale: cs })}
+                      </p>
+                    </div>
+                    <div className="w-px h-8 bg-slate-100 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-800">{log.clockIn} – {log.clockOut}</p>
+                      {log.notes && <p className="text-[11px] text-slate-400 truncate">{log.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-700">{log.hours}h</span>
+                      <button
+                        onClick={() => handleDeleteLog(log.id)}
+                        className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                        title="Smazat"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Open shifts to apply */}

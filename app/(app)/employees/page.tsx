@@ -1,10 +1,14 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
+import { format } from 'date-fns'
+import { cs } from 'date-fns/locale'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { EMPLOYEES, SHIFTS, getWeeklyHours } from '@/lib/mock-data'
-import { Search, Phone, Mail, Copy, Check, Clock, CalendarDays } from 'lucide-react'
+import { getAllMonthLogs, sumHours, seedDemoLogs } from '@/lib/work-logs'
+import type { WorkLog } from '@/lib/work-logs'
+import { Search, Phone, Mail, Copy, Check, Clock, CalendarDays, ChevronLeft, ChevronRight, Banknote } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -27,6 +31,25 @@ export default function EmployeesPage() {
 
   const isNewBusiness = activeBusiness?.id.startsWith('biz-reg-')
   const baseEmployees = isNewBusiness ? [] : EMPLOYEES
+
+  // ─── Payroll state ───────────────────────────────────────────────────────────
+  const [payrollMonth, setPayrollMonth] = useState(format(new Date(), 'yyyy-MM'))
+  const [monthLogs, setMonthLogs] = useState<WorkLog[]>([])
+
+  useEffect(() => {
+    seedDemoLogs(EMPLOYEES.map(e => ({ id: e.id, name: e.name })))
+    setMonthLogs(getAllMonthLogs(payrollMonth))
+  }, [payrollMonth])
+
+  const prevPayrollMonth = () => {
+    const [y, m] = payrollMonth.split('-').map(Number)
+    setPayrollMonth(format(new Date(y, m - 2, 1), 'yyyy-MM'))
+  }
+  const nextPayrollMonth = () => {
+    const [y, m] = payrollMonth.split('-').map(Number)
+    const next = new Date(y, m, 1)
+    if (next <= new Date()) setPayrollMonth(format(next, 'yyyy-MM'))
+  }
 
   const joinCode = activeBusiness
     ? activeBusiness.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '111111'
@@ -255,6 +278,67 @@ export default function EmployeesPage() {
             </div>
           )}
         </div>
+
+        {/* ── PAYROLL SECTION ────────────────────────────────────────────── */}
+        {!isNewBusiness && (
+          <div className="mt-6">
+            <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-green-600" />
+              Výplatní podklady — odpracované hodiny
+            </h2>
+
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+              {/* Month nav */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
+                <div className="flex items-center gap-2">
+                  <button onClick={prevPayrollMonth} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <p className="text-xs font-semibold text-slate-700 capitalize min-w-[100px] text-center">
+                    {format(new Date(payrollMonth + '-01'), 'LLLL yyyy', { locale: cs })}
+                  </p>
+                  <button
+                    onClick={nextPayrollMonth}
+                    disabled={payrollMonth >= format(new Date(), 'yyyy-MM')}
+                    className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Celkem: <span className="font-bold text-slate-700">{sumHours(monthLogs)}h</span>
+                </p>
+              </div>
+
+              {/* Per-employee rows */}
+              {baseEmployees.length === 0 ? (
+                <p className="px-5 py-10 text-center text-sm text-slate-400">Žádní zaměstnanci.</p>
+              ) : (
+                <div className="divide-y divide-slate-50">
+                  {baseEmployees.map(emp => {
+                    const empLogs = monthLogs.filter(l => l.employeeId === emp.id)
+                    const total = sumHours(empLogs)
+                    return (
+                      <div key={emp.id} className="flex items-center gap-3 px-5 py-3.5">
+                        <UserAvatar name={emp.name} color={emp.color} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-800 truncate">{emp.name}</p>
+                          <p className="text-xs text-slate-400">{empLogs.length} záznamů</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-bold ${total > 0 ? 'text-slate-800' : 'text-slate-300'}`}>
+                            {total}h
+                          </p>
+                          <p className="text-[10px] text-slate-400">odpracováno</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
