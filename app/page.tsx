@@ -3,6 +3,7 @@ import {
   CalendarDays, Users, Bell, BarChart3, ShieldCheck, Smartphone,
   ArrowRight, CheckCircle2, Zap, Star,
 } from 'lucide-react'
+import { InstallButton } from '@/components/shared/InstallButton'
 
 const FEATURES = [
   {
@@ -97,6 +98,7 @@ export default function LandingPage() {
             <a href="#cenik" className="hover:text-slate-900 transition-colors">Ceník</a>
           </div>
           <div className="flex items-center gap-3">
+            <InstallButton />
             <Link href="/login" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
               Přihlásit se
             </Link>
