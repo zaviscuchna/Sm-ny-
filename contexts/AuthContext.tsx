@@ -3,11 +3,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import type { User, Business } from '@/types'
 import { ALL_USERS, BUSINESSES } from '@/lib/mock-data'
-import { supabaseEnabled } from '@/lib/supabase'
-import {
-  dbCreateBusiness, dbCreateUser, dbGetUserByEmail,
-  dbGetBusinessByJoinCode, dbGetBusiness,
-} from '@/lib/db'
 
 const STORAGE_KEY     = 'smenky_user'
 const BIZ_SESSION_KEY = 'smenky_active_biz'
@@ -20,9 +15,6 @@ const DEMO_CODES: Record<string, string> = {
   '222222': 'biz-2',
   '333333': 'biz-3',
 }
-
-const AVATAR_COLORS = ['#6366f1','#f59e0b','#10b981','#ec4899','#3b82f6','#8b5cf6','#14b8a6','#f97316']
-const randomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
 
 function getRegisteredUsers(): User[] {
   try { return JSON.parse(localStorage.getItem(REG_USERS_KEY) || '[]') } catch { return [] }
@@ -45,7 +37,7 @@ interface AuthContextType {
   user:           User | null
   loading:        boolean
   activeBusiness: Business | null
-  joinCode:       string | null   // join code for active registered business
+  joinCode:       string | null
   login:          (email: string) => Promise<AuthResult>
   register:       (type: 'manager' | 'employee', data: RegisterData) => Promise<AuthResult>
   logout:         () => void
@@ -105,52 +97,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: true, role: mockUser.role }
     }
 
-    // 2. Check localStorage registered users
+    // 2. Check localStorage registered users (fast, offline)
     const regUser = getRegisteredUsers().find(u => u.email.toLowerCase() === email.toLowerCase())
     if (regUser) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(regUser))
       setUser(regUser)
-      const bizList = getRegisteredBiz()
-      const biz = bizList.find(b => b.id === (regUser as any).businessId)
+      const biz = getRegisteredBiz().find(b => b.id === (regUser as any).businessId)
       if (biz) storeBiz(biz, (biz as any).joinCode)
       return { success: true, role: regUser.role }
     }
 
-    // 3. Check Supabase (registered users that may have been created on another device)
-    if (supabaseEnabled) {
-      try {
-        const dbUser = await dbGetUserByEmail(email)
-        if (dbUser) {
-          const newUser: User = {
-            id:    dbUser.id,
-            name:  dbUser.name,
-            email: dbUser.email,
-            role:  dbUser.role,
-            color: dbUser.color,
-          }
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
-          setUser(newUser)
-
-          if (dbUser.businessId) {
-            const bizData = await dbGetBusiness(dbUser.businessId)
-            if (bizData) {
-              const biz = bizData.business
-              // Also cache in localStorage for fast reload
-              const existing = getRegisteredBiz()
-              if (!existing.find(b => b.id === biz.id)) {
-                localStorage.setItem(REG_BIZ_KEY, JSON.stringify([
-                  ...existing,
-                  { ...biz, joinCode: bizData.joinCode },
-                ]))
-              }
-              storeBiz(biz, bizData.joinCode)
-            }
-          }
-
-          return { success: true, role: dbUser.role }
+    // 3. Check database (user registered on another device)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (data) {
+        const newUser: User = {
+          id:    data.user.id,
+          name:  data.user.name,
+          email: data.user.email,
+          role:  data.user.role,
+          color: data.user.color,
         }
-      } catch {}
-    }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
+        setUser(newUser)
+
+        if (data.business) {
+          const existing = getRegisteredBiz()
+          if (!existing.find(b => b.id === data.business.id)) {
+            localStorage.setItem(REG_BIZ_KEY, JSON.stringify([
+              ...existing,
+              { ...data.business, joinCode: data.joinCode },
+            ]))
+          }
+          storeBiz(data.business, data.joinCode)
+        }
+
+        return { success: true, role: data.user.role }
+      }
+    } catch {}
 
     return { success: false, error: 'Uživatel nenalezen. Zkus demo účet nebo se zaregistruj.' }
   }
@@ -161,93 +150,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     type: 'manager' | 'employee',
     data: RegisterData,
   ): Promise<AuthResult> => {
+    // Check mock + localStorage first
     const allUsers = [...ALL_USERS, ...getRegisteredUsers()]
     if (allUsers.find(u => u.email.toLowerCase() === data.email.toLowerCase())) {
       return { success: false, error: 'Tento e-mail je již registrován.' }
     }
 
-    let biz: Business | null = null
-    let code: string | undefined
-
-    if (type === 'manager') {
-      if (supabaseEnabled) {
-        try {
-          const result = await dbCreateBusiness(data.businessName!, data.location ?? '')
-          biz  = result.business
-          code = result.joinCode
-        } catch (e: any) {
-          return { success: false, error: `Chyba při vytváření podniku: ${e.message}` }
-        }
-      } else {
-        // Offline fallback — localStorage only
-        biz  = { id: `biz-reg-${Date.now()}`, name: data.businessName!, location: data.location ?? '' }
-        code = String(Math.floor(100000 + Math.random() * 900000))
-      }
-
-      // Cache biz with join code in localStorage
-      const existing = getRegisteredBiz()
-      localStorage.setItem(REG_BIZ_KEY, JSON.stringify([...existing, { ...biz, joinCode: code }]))
-
-    } else {
-      // Employee: look up business by join code
-      const codeStr = data.joinCode?.trim() ?? ''
-      const demoBizId = DEMO_CODES[codeStr]
-
+    // Check demo codes (employee joining demo business — no DB needed)
+    if (type === 'employee') {
+      const codeStr    = data.joinCode?.trim() ?? ''
+      const demoBizId  = DEMO_CODES[codeStr]
       if (demoBizId) {
-        biz = BUSINESSES.find(b => b.id === demoBizId) ?? null
-      } else if (supabaseEnabled) {
-        try {
-          const result = await dbGetBusinessByJoinCode(codeStr)
-          if (result) { biz = result.business; code = result.joinCode }
-        } catch {}
-      }
-
-      if (!biz) {
-        // Try localStorage registered businesses
-        const regBiz = getRegisteredBiz()
-        const found = regBiz.find(b =>
-          (b as any).joinCode === codeStr ||
-          b.id.replace(/\D/g, '').slice(-6).padStart(6, '0') === codeStr
-        )
-        if (found) { biz = found; code = (found as any).joinCode }
-      }
-
-      if (!biz) return { success: false, error: 'Kód podniku nebyl nalezen. Zkus 111111 pro demo.' }
-    }
-
-    const newUser: User & { businessId?: string } = {
-      id:         `u-reg-${Date.now()}`,
-      name:       data.name,
-      email:      data.email,
-      role:       type === 'manager' ? 'manager' : 'employee',
-      color:      randomColor(),
-      businessId: biz?.id,
-    }
-
-    // Write to Supabase if configured and it's a registered (non-demo) business
-    if (supabaseEnabled && biz && biz.id.startsWith('biz-reg-')) {
-      try {
-        await dbCreateUser({
-          id:         newUser.id,
-          name:       newUser.name,
-          email:      newUser.email,
-          role:       newUser.role,
-          businessId: biz.id,
-          color:      newUser.color!,
-        })
-      } catch (e: any) {
-        return { success: false, error: `Chyba při registraci: ${e.message}` }
+        const biz = BUSINESSES.find(b => b.id === demoBizId)
+        if (biz) {
+          const newUser: User & { businessId?: string } = {
+            id:    `u-reg-${Date.now()}`,
+            name:  data.name,
+            email: data.email,
+            role:  'employee',
+            color: '#6366f1',
+            businessId: biz.id,
+          }
+          const existing = getRegisteredUsers()
+          localStorage.setItem(REG_USERS_KEY, JSON.stringify([...existing, newUser]))
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
+          setUser(newUser)
+          storeBiz(biz)
+          return { success: true, role: 'employee' }
+        }
       }
     }
 
-    // Always cache in localStorage
-    const existing = getRegisteredUsers()
-    localStorage.setItem(REG_USERS_KEY, JSON.stringify([...existing, newUser]))
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
-    setUser(newUser)
+    // Call register API (creates in DB)
+    try {
+      const res = await fetch('/api/auth/register', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ type, ...data }),
+      })
+      const result = await res.json()
 
-    if (biz) storeBiz(biz, code)
-    return { success: true, role: newUser.role }
+      if (!res.ok) {
+        return { success: false, error: result.error ?? 'Chyba při registraci.' }
+      }
+
+      const newUser: User & { businessId?: string } = {
+        id:         result.user.id,
+        name:       result.user.name,
+        email:      result.user.email,
+        role:       result.user.role,
+        color:      result.user.color,
+        businessId: result.user.businessId,
+      }
+
+      // Cache in localStorage
+      const existingUsers = getRegisteredUsers()
+      localStorage.setItem(REG_USERS_KEY, JSON.stringify([...existingUsers, newUser]))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
+      setUser(newUser)
+
+      if (result.business) {
+        const existingBiz = getRegisteredBiz()
+        if (!existingBiz.find(b => b.id === result.business.id)) {
+          localStorage.setItem(REG_BIZ_KEY, JSON.stringify([
+            ...existingBiz,
+            { ...result.business, joinCode: result.joinCode },
+          ]))
+        }
+        storeBiz(result.business, result.joinCode)
+      }
+
+      return { success: true, role: newUser.role }
+    } catch (e: any) {
+      return { success: false, error: `Chyba při registraci: ${e.message}` }
+    }
   }
 
   // ─── logout / switch ─────────────────────────────────────────────────────────
@@ -283,8 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Re-export dbGetBusinessByJoinCode so register page can call it directly if needed
-export { dbGetBusinessByJoinCode }
+export { }
 
 export function useAuth() {
   const ctx = useContext(AuthContext)

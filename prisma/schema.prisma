@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id        String    @id
+  name      String
+  location  String    @default("")
+  join_code String    @unique
+  users     User[]
+  shifts    Shift[]
+  work_logs WorkLog[]
+}
+
+model User {
+  id          String    @id
+  name        String
+  email       String    @unique
+  role        String
+  color       String
+  phone       String?
+  business_id String
+  business    Business  @relation(fields: [business_id], references: [id])
+  work_logs   WorkLog[]
+}
+
+model Shift {
+  id                   String   @id
+  business_id          String
+  date                 String
+  start_time           String
+  end_time             String
+  role_needed          String
+  assigned_employee_id String?
+  status               String
+  notes                String?
+  business             Business @relation(fields: [business_id], references: [id])
+}
+
+model WorkLog {
+  id            String   @id
+  employee_id   String
+  employee_name String
+  business_id   String
+  date          String
+  clock_in      String
+  clock_out     String
+  hours         Float
+  notes         String?
+  employee      User     @relation(fields: [employee_id], references: [id])
+  business      Business @relation(fields: [business_id], references: [id])
+}
