@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push && next build",
-    "start": "next start",
+    "build": "DATABASE_URL='postgresql://x:x@localhost/x' prisma generate && next build",
+    "start": "prisma db push && next start",
     "lint": "eslint"
   },
   "dependencies": {
