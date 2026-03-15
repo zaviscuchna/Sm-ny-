@@ -7,7 +7,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const client = await pool.connect()
+  // Debug: check if DATABASE_URL is set
+  const dbUrl = process.env.DATABASE_URL
+  if (!dbUrl) {
+    return NextResponse.json({ error: 'DATABASE_URL is not set' }, { status: 500 })
+  }
+
+  let client
+  try {
+    client = await pool.connect()
+  } catch (e: any) {
+    return NextResponse.json({ error: 'DB connect failed', detail: e.message }, { status: 500 })
+  }
+
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS "Business" (
@@ -55,6 +67,8 @@ export async function GET(req: NextRequest) {
       )
     `)
     return NextResponse.json({ ok: true, message: 'Tabulky vytvořeny.' })
+  } catch (e: any) {
+    return NextResponse.json({ error: 'Query failed', detail: e.message }, { status: 500 })
   } finally {
     client.release()
   }
