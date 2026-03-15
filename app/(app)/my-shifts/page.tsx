@@ -7,8 +7,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { WelcomeModal } from '@/components/shared/WelcomeModal'
-import { SHIFTS, OPEN_SHIFTS } from '@/lib/mock-data'
-import { saveWorkLog, deleteWorkLog, getEmployeeLogs, sumHours } from '@/lib/work-logs'
+import { OPEN_SHIFTS } from '@/lib/mock-data'
+import { sumHours } from '@/lib/work-logs'
+import { getLogsForEmployee, saveLogToDB, deleteLogFromDB, getShiftsForBusiness } from '@/lib/db'
 import type { WorkLog } from '@/lib/work-logs'
 import type { Shift } from '@/types'
 import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -22,11 +23,18 @@ function getDuration(start: string, end: string) {
 }
 
 export default function MyShiftsPage() {
-  const { user } = useAuth()
+  const { user, activeBusiness } = useAuth()
 
   const todayStr = format(new Date(), 'yyyy-MM-dd')
 
-  const myShifts = SHIFTS
+  const [allBizShifts, setAllBizShifts] = useState<Shift[]>([])
+
+  useEffect(() => {
+    if (!activeBusiness) return
+    getShiftsForBusiness(activeBusiness.id).then(setAllBizShifts)
+  }, [activeBusiness?.id])
+
+  const myShifts = allBizShifts
     .filter(s => s.assignedEmployee?.id === user?.id)
     .sort((a, b) => a.date.localeCompare(b.date))
 
@@ -45,8 +53,10 @@ export default function MyShiftsPage() {
   const [logMonth, setLogMonth] = useState(format(new Date(), 'yyyy-MM'))
 
   useEffect(() => {
-    if (user?.id) setLogs(getEmployeeLogs(user.id))
-  }, [user?.id])
+    if (user?.id && activeBusiness?.id) {
+      getLogsForEmployee(user.id, activeBusiness.id).then(setLogs)
+    }
+  }, [user?.id, activeBusiness?.id])
 
   const monthLogs = logs.filter(l => l.date.startsWith(logMonth))
   const monthTotal = sumHours(monthLogs)
@@ -62,20 +72,20 @@ export default function MyShiftsPage() {
     if (d <= new Date()) setLogMonth(format(d, 'yyyy-MM'))
   }
 
-  const handleLogSubmit = (e: React.FormEvent) => {
+  const handleLogSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!clockIn || !clockOut) { toast.error('Vyplň čas příchodu i odchodu'); return }
     const [ih, im] = clockIn.split(':').map(Number)
     const [oh, om] = clockOut.split(':').map(Number)
     if ((oh + om / 60) <= (ih + im / 60)) { toast.error('Čas odchodu musí být po příchodu'); return }
-    const log = saveWorkLog({
-      employeeId: user!.id,
+    const log = await saveLogToDB({
+      employeeId:   user!.id,
       employeeName: user!.name,
-      date: logDate,
+      date:         logDate,
       clockIn,
       clockOut,
       notes: logNotes || undefined,
-    })
+    }, activeBusiness!.id)
     setLogs(prev => [log, ...prev])
     setClockIn('')
     setClockOut('')
@@ -83,8 +93,8 @@ export default function MyShiftsPage() {
     toast.success(`Záznam uložen — ${log.hours}h`)
   }
 
-  const handleDeleteLog = (id: string) => {
-    deleteWorkLog(id)
+  const handleDeleteLog = async (id: string) => {
+    await deleteLogFromDB(id, activeBusiness?.id ?? '')
     setLogs(prev => prev.filter(l => l.id !== id))
     toast.success('Záznam smazán')
   }

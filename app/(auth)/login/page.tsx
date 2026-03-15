@@ -43,7 +43,7 @@ function LoginForm() {
     setLoading(true)
     await new Promise(r => setTimeout(r, 400))
 
-    const result = login(email)
+    const result = await login(email)
     setLoading(false)
 
     if (!result.success) {

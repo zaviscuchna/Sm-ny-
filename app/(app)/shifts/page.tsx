@@ -8,9 +8,9 @@ import { TopBar } from '@/components/layout/TopBar'
 import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { NewShiftDialog } from '@/components/shifts/NewShiftDialog'
-import { SHIFTS } from '@/lib/mock-data'
-import type { Shift } from '@/types'
-import { ChevronLeft, ChevronRight, Clock, User, Plus } from 'lucide-react'
+import { getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
+import type { Shift, User } from '@/types'
+import { ChevronLeft, ChevronRight, Clock, User as UserIcon, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
@@ -32,11 +32,27 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function ShiftsPage() {
   const { activeBusiness } = useAuth()
-  const isNewBusiness = activeBusiness?.id.startsWith('biz-reg-')
-  const [weekOffset, setWeekOffset]     = useState(0)
-  const [extraShifts, setExtraShifts]   = useState<Shift[]>([])
+  const [weekOffset, setWeekOffset]       = useState(0)
+  const [dbShifts,   setDbShifts]         = useState<Shift[]>([])
+  const [extraShifts, setExtraShifts]     = useState<Shift[]>([])
+  const [employees, setEmployees]         = useState<User[]>([])
+  const [loadingShifts, setLoadingShifts] = useState(false)
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const [selectedDateStr, setSelectedDateStr] = useState(todayStr)
+
+  // Load shifts + employees whenever the active business changes
+  useEffect(() => {
+    if (!activeBusiness) return
+    setLoadingShifts(true)
+    setExtraShifts([])
+    Promise.all([
+      getShiftsForBusiness(activeBusiness.id),
+      getEmployeesForBusiness(activeBusiness.id),
+    ]).then(([shifts, emps]) => {
+      setDbShifts(shifts)
+      setEmployees(emps)
+    }).finally(() => setLoadingShifts(false))
+  }, [activeBusiness?.id])
 
   const weekStart = useMemo(() => {
     const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
@@ -56,11 +72,10 @@ export default function ShiftsPage() {
     if (!inWeek) setSelectedDateStr(weekDays[0].dateStr)
   }, [weekDays, selectedDateStr])
 
-  const allShifts = [...(isNewBusiness ? [] : SHIFTS), ...extraShifts]
+  const allShifts = [...dbShifts, ...extraShifts]
 
-  const handleShiftCreated = (shift: Shift) => {
-    setExtraShifts(prev => [...prev, shift])
-    toast.success('Směna přidána')
+  const handleShiftsCreated = (shifts: Shift[]) => {
+    setExtraShifts(prev => [...prev, ...shifts])
   }
 
   const selectedDayShifts = allShifts.filter(s => s.date === selectedDateStr)
@@ -90,7 +105,7 @@ export default function ShiftsPage() {
             </Button>
           )}
         </div>
-        <NewShiftDialog onShiftCreated={handleShiftCreated} />
+        <NewShiftDialog employees={employees} onShiftsCreated={handleShiftsCreated} />
       </div>
 
       {/* ── MOBILE VIEW ─────────────────────────────────────────────────── */}
@@ -140,7 +155,7 @@ export default function ShiftsPage() {
           {selectedDayShifts.length === 0 ? (
             <NewShiftDialog
               defaultDate={selectedDateStr}
-              onShiftCreated={handleShiftCreated}
+              employees={employees} onShiftsCreated={handleShiftsCreated}
               trigger={
                 <button className="w-full border-2 border-dashed border-slate-200 rounded-2xl py-10 flex flex-col items-center gap-2 text-slate-400 hover:border-indigo-300 hover:text-indigo-400 transition-all">
                   <div className="w-10 h-10 rounded-full border-2 border-dashed border-current flex items-center justify-center">
@@ -157,7 +172,7 @@ export default function ShiftsPage() {
               ))}
               <NewShiftDialog
                 defaultDate={selectedDateStr}
-                onShiftCreated={handleShiftCreated}
+                employees={employees} onShiftsCreated={handleShiftsCreated}
                 trigger={
                   <button className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-200 rounded-2xl py-3 text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all">
                     <Plus className="w-4 h-4" /> Přidat další směnu
@@ -191,7 +206,7 @@ export default function ShiftsPage() {
 
                 <div className="flex flex-col gap-1.5">
                   {dayShifts.length === 0 ? (
-                    <NewShiftDialog defaultDate={dateStr} onShiftCreated={handleShiftCreated}
+                    <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
                       trigger={
                         <button className="w-full h-16 border-2 border-dashed border-slate-100 rounded-xl text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all text-xs flex flex-col items-center justify-center gap-1">
                           <span className="text-lg leading-none">+</span>
@@ -201,7 +216,7 @@ export default function ShiftsPage() {
                   ) : (
                     <>
                       {dayShifts.map(shift => <DesktopShiftCard key={shift.id} shift={shift} />)}
-                      <NewShiftDialog defaultDate={dateStr} onShiftCreated={handleShiftCreated}
+                      <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
                         trigger={
                           <button className="w-full h-7 border border-dashed border-slate-100 rounded-lg text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all text-xs flex items-center justify-center">
                             <span className="text-sm leading-none">+</span>
@@ -248,7 +263,7 @@ function MobileShiftCard({ shift }: { shift: Shift }) {
           ) : (
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                <User className="w-3 h-3 text-slate-400" />
+                <UserIcon className="w-3 h-3 text-slate-400" />
               </div>
               <span className="text-xs text-red-500 font-semibold">Volná pozice</span>
             </div>
@@ -284,7 +299,7 @@ function DesktopShiftCard({ shift }: { shift: Shift }) {
       ) : (
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center">
-            <User className="w-2 h-2 text-slate-400" />
+            <UserIcon className="w-2 h-2 text-slate-400" />
           </div>
           <span className="text-[10px] text-red-500 font-medium">Volná</span>
         </div>

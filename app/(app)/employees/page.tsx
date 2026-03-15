@@ -5,7 +5,8 @@ import { format } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
-import { EMPLOYEES, SHIFTS, getWeeklyHours } from '@/lib/mock-data'
+import { SHIFTS, getWeeklyHours } from '@/lib/mock-data'
+import { getEmployeesForBusiness, getLogsForBusiness, isRegistered } from '@/lib/db'
 import { getAllMonthLogs, sumHours, seedDemoLogs } from '@/lib/work-logs'
 import type { WorkLog } from '@/lib/work-logs'
 import { Search, Phone, Mail, Copy, Check, Clock, CalendarDays, ChevronLeft, ChevronRight, Banknote } from 'lucide-react'
@@ -16,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import type { User } from '@/types'
 
 type SortKey = 'name' | 'hours'
 
@@ -29,20 +31,31 @@ export default function EmployeesPage() {
   const [sortBy, setSortBy] = useState<SortKey>('name')
   const [copied, setCopied] = useState(false)
 
+  const [baseEmployees, setBaseEmployees] = useState<User[]>([])
   const isNewBusiness = activeBusiness?.id.startsWith('biz-reg-')
-  const baseEmployees = isNewBusiness ? [] : EMPLOYEES
+
+  // Load employees from Supabase (or mock)
+  useEffect(() => {
+    if (!activeBusiness) return
+    getEmployeesForBusiness(activeBusiness.id).then(setBaseEmployees)
+  }, [activeBusiness?.id])
 
   // ─── Payroll state ───────────────────────────────────────────────────────────
   const [payrollMonth, setPayrollMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [monthLogs, setMonthLogs] = useState<WorkLog[]>([])
 
+  // Seed demo logs once (only for demo businesses)
   useEffect(() => {
-    if (!isNewBusiness) seedDemoLogs(EMPLOYEES.map(e => ({ id: e.id, name: e.name })))
-  }, [isNewBusiness])
+    if (!isNewBusiness && baseEmployees.length > 0 && !isRegistered(activeBusiness?.id ?? '')) {
+      seedDemoLogs(baseEmployees.map(e => ({ id: e.id, name: e.name })))
+    }
+  }, [isNewBusiness, baseEmployees.length])
 
+  // Load monthly logs (Supabase or localStorage depending on biz type)
   useEffect(() => {
-    setMonthLogs(getAllMonthLogs(payrollMonth))
-  }, [payrollMonth])
+    if (!activeBusiness) return
+    getLogsForBusiness(activeBusiness.id, payrollMonth).then(setMonthLogs)
+  }, [activeBusiness?.id, payrollMonth])
 
   const prevPayrollMonth = () => {
     const [y, m] = payrollMonth.split('-').map(Number)

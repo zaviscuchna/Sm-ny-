@@ -12,14 +12,14 @@ import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
 export default function SettingsPage() {
-  const { user, activeBusiness, logout } = useAuth()
+  const { user, activeBusiness, joinCode: ctxJoinCode, logout } = useAuth()
   const router = useRouter()
   const [copied, setCopied] = useState(false)
 
   const isNewBusiness = activeBusiness?.id.startsWith('biz-reg-')
-  const joinCode = activeBusiness
-    ? activeBusiness.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '111111'
-    : '111111'
+  // Use join code from context (real code for Supabase businesses) or derive from id for demo
+  const joinCode = ctxJoinCode
+    ?? (activeBusiness ? activeBusiness.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '111111' : '111111')
 
   const copyCode = () => {
     navigator.clipboard.writeText(joinCode).then(() => {

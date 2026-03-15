@@ -29,12 +29,12 @@ export default function RegisterPage() {
   // Employee fields
   const [joinCode, setJoinCode] = useState('')
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    const result = register(flow!, {
+    const result = await register(flow!, {
       name,
       email,
       businessName: flow === 'manager' ? bizName : undefined,
