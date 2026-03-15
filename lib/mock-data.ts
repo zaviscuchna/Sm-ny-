@@ -23,6 +23,15 @@ export const SUPER_ADMIN: User = {
   color: '#0f172a',
 }
 
+export const DEV_USER: User = {
+  id: 'u-dev',
+  name: 'Záviš Čuchna',
+  email: 'dev@ksh.cz',
+  role: 'superadmin',
+  phone: '+420 777 000 000',
+  color: '#6366f1',
+}
+
 // — Kavárna Aroma (biz-1)
 export const MANAGER: User = {
   id: 'u-0',
@@ -79,6 +88,7 @@ export const EMPLOYEES_B3: User[] = [
 
 export const ALL_USERS: User[] = [
   SUPER_ADMIN,
+  DEV_USER,
   MANAGER, ...EMPLOYEES,
   MANAGER_B2, ...EMPLOYEES_B2,
   MANAGER_B3, ...EMPLOYEES_B3,
