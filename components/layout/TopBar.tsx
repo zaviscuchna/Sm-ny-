@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SHIFT_APPLICATIONS } from '@/lib/mock-data'
 import type { ShiftApplication } from '@/types'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import Link from 'next/link'
 
@@ -106,7 +106,7 @@ export function TopBar({ title, subtitle }: TopBarProps) {
                           <p className="text-xs font-semibold text-slate-800 truncate">{app.employee.name}</p>
                           <p className="text-xs text-slate-500 truncate">{app.shift.roleNeeded}</p>
                           <p className="text-[11px] text-slate-400 mt-0.5">
-                            {format(new Date(app.shift.date), 'EEE d. M.', { locale: cs })} · {app.shift.startTime}–{app.shift.endTime}
+                            {format(parseISO(app.shift.date), 'EEE d. M.', { locale: cs })} · {app.shift.startTime}–{app.shift.endTime}
                           </p>
                         </div>
                         <div className="flex gap-1 shrink-0">

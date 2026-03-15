@@ -1,19 +1,34 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Coffee } from 'lucide-react'
 
+const MANAGER_ROUTES   = ['/dashboard', '/shifts', '/employees', '/open-shifts', '/settings']
+const EMPLOYEE_ROUTES  = ['/my-shifts', '/open-shifts', '/settings']
+const SUPERADMIN_ROUTES = ['/admin', '/settings']
+
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
-  const router = useRouter()
+  const router   = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login')
+    if (loading) return
+    if (!user) { router.push('/login'); return }
+
+    const role = user.role
+    if (role === 'employee' && !EMPLOYEE_ROUTES.some(r => pathname.startsWith(r))) {
+      router.replace('/my-shifts')
+    } else if (role === 'manager' && !MANAGER_ROUTES.some(r => pathname.startsWith(r))) {
+      router.replace('/dashboard')
+    } else if (role === 'superadmin' && !SUPERADMIN_ROUTES.some(r => pathname.startsWith(r))
+      // superadmin browsing a biz context can access manager routes
+      && !MANAGER_ROUTES.some(r => pathname.startsWith(r))) {
+      router.replace('/admin')
     }
-  }, [user, loading, router])
+  }, [user, loading, router, pathname])
 
   if (loading) {
     return (

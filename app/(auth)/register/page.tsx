@@ -61,7 +61,7 @@ export default function RegisterPage() {
         <div className="text-center">
           <Link href="/" className="inline-flex items-center gap-2 text-slate-100 font-bold text-xl">
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">S</div>
-            Směnky
+            Směny
           </Link>
         </div>
 

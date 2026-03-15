@@ -6,7 +6,8 @@ import { cs } from 'date-fns/locale'
 import { useAuth } from '@/contexts/AuthContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
-import { SHIFTS, SHIFT_APPLICATIONS, EMPLOYEES } from '@/lib/mock-data'
+import { SHIFTS, SHIFT_APPLICATIONS } from '@/lib/mock-data'
+import { parseISO } from 'date-fns'
 import type { Shift, ShiftApplication } from '@/types'
 import { Clock, Calendar, Briefcase, CheckCircle2, XCircle, UserPlus, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -89,7 +90,7 @@ export default function OpenShiftsPage() {
                           <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500">
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
-                              {format(new Date(shift.date), 'EEEE d. M.', { locale: cs })}
+                              {format(parseISO(shift.date), 'EEEE d. M.', { locale: cs })}
                             </span>
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />

@@ -37,7 +37,10 @@ export default function EmployeesPage() {
   const [monthLogs, setMonthLogs] = useState<WorkLog[]>([])
 
   useEffect(() => {
-    seedDemoLogs(EMPLOYEES.map(e => ({ id: e.id, name: e.name })))
+    if (!isNewBusiness) seedDemoLogs(EMPLOYEES.map(e => ({ id: e.id, name: e.name })))
+  }, [isNewBusiness])
+
+  useEffect(() => {
     setMonthLogs(getAllMonthLogs(payrollMonth))
   }, [payrollMonth])
 
