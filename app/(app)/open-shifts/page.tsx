@@ -61,7 +61,7 @@ export default function OpenShiftsPage() {
       setOpenShifts(SHIFTS.filter(s => s.status === 'open'))
       setApps(SHIFT_APPLICATIONS)
     }
-  }, [activeBusiness?.id])
+  }, [activeBusiness?.id, user?.id])
   const [expandedShift, setExpandedShift] = useState<string | null>(null)
 
   const handleApply = async (shift: Shift) => {

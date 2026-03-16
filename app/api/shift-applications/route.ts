@@ -8,7 +8,11 @@ export async function GET(req: NextRequest) {
   const client = await pool.connect()
   try {
     const res = await client.query(
-      'SELECT * FROM "ShiftApplication" WHERE business_id = $1 ORDER BY created_at DESC',
+      `SELECT a.*, s.date AS shift_date, s.start_time, s.end_time, s.role_needed
+       FROM "ShiftApplication" a
+       LEFT JOIN "Shift" s ON s.id = a.shift_id
+       WHERE a.business_id = $1
+       ORDER BY a.created_at DESC`,
       [bizId]
     )
     return NextResponse.json(res.rows.map(rowToApp))
@@ -69,12 +73,16 @@ export async function PATCH(req: NextRequest) {
 
 function rowToApp(row: any) {
   return {
-    id: row.id,
-    shiftId: row.shift_id,
-    employeeId: row.employee_id,
+    id:           row.id,
+    shiftId:      row.shift_id,
+    employeeId:   row.employee_id,
     employeeName: row.employee_name,
-    bizId: row.business_id,
-    status: row.status,
-    createdAt: row.created_at,
+    bizId:        row.business_id,
+    status:       row.status,
+    createdAt:    row.created_at,
+    shiftDate:    row.shift_date ?? '',
+    startTime:    row.start_time ?? '',
+    endTime:      row.end_time ?? '',
+    roleNeeded:   row.role_needed ?? '',
   }
 }

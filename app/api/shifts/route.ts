@@ -38,6 +38,44 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  const { id, assignedEmployeeId, status, roleNeeded, startTime, endTime, date, notes } = await req.json()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const client = await pool.connect()
+  try {
+    const sets: string[] = []
+    const vals: any[] = []
+    let idx = 1
+    if (assignedEmployeeId !== undefined) { sets.push(`assigned_employee_id = $${idx++}`); vals.push(assignedEmployeeId === null ? null : assignedEmployeeId) }
+    if (status      !== undefined) { sets.push(`status = $${idx++}`);     vals.push(status) }
+    if (roleNeeded  !== undefined) { sets.push(`role_needed = $${idx++}`); vals.push(roleNeeded) }
+    if (startTime   !== undefined) { sets.push(`start_time = $${idx++}`);  vals.push(startTime) }
+    if (endTime     !== undefined) { sets.push(`end_time = $${idx++}`);    vals.push(endTime) }
+    if (date        !== undefined) { sets.push(`date = $${idx++}`);        vals.push(date) }
+    if (notes       !== undefined) { sets.push(`notes = $${idx++}`);       vals.push(notes) }
+    if (sets.length > 0) {
+      vals.push(id)
+      await client.query(`UPDATE "Shift" SET ${sets.join(', ')} WHERE id = $${idx}`, vals)
+    }
+    return NextResponse.json({ ok: true })
+  } finally {
+    client.release()
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const client = await pool.connect()
+  try {
+    await client.query('DELETE FROM "ShiftApplication" WHERE shift_id = $1', [id])
+    await client.query('DELETE FROM "Shift" WHERE id = $1', [id])
+    return NextResponse.json({ ok: true })
+  } finally {
+    client.release()
+  }
+}
+
 export async function POST(req: NextRequest) {
   const { shifts } = await req.json()
   const client = await pool.connect()
