@@ -26,7 +26,7 @@ function getShiftsCount(employeeId: string) {
 }
 
 export default function EmployeesPage() {
-  const { activeBusiness } = useAuth()
+  const { activeBusiness, joinCode: authJoinCode } = useAuth()
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('name')
   const [copied, setCopied] = useState(false)
@@ -67,9 +67,7 @@ export default function EmployeesPage() {
     if (next <= new Date()) setPayrollMonth(format(next, 'yyyy-MM'))
   }
 
-  const joinCode = activeBusiness
-    ? activeBusiness.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '111111'
-    : '111111'
+  const joinCode = authJoinCode ?? '------'
 
   const copyCode = () => {
     navigator.clipboard.writeText(joinCode).then(() => {

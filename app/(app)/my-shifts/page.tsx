@@ -7,9 +7,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { WelcomeModal } from '@/components/shared/WelcomeModal'
-import { OPEN_SHIFTS } from '@/lib/mock-data'
 import { sumHours } from '@/lib/work-logs'
-import { getLogsForEmployee, saveLogToDB, deleteLogFromDB, getShiftsForBusiness } from '@/lib/db'
+import { getLogsForEmployee, saveLogToDB, deleteLogFromDB, getShiftsForBusiness, isRegistered } from '@/lib/db'
 import type { WorkLog } from '@/lib/work-logs'
 import type { Shift } from '@/types'
 import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -41,8 +40,25 @@ export default function MyShiftsPage() {
   const upcomingShifts = myShifts.filter(s => s.date >= todayStr)
   const pastShifts     = myShifts.filter(s => s.date < todayStr)
 
+  const openShifts = allBizShifts.filter(s => s.status === 'open')
+
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
   const [confirmedShifts, setConfirmedShifts] = useState<Set<string>>(new Set())
+
+  // Load existing applications from DB
+  useEffect(() => {
+    if (!activeBusiness || !user) return
+    if (!isRegistered(activeBusiness.id)) return
+    fetch(`/api/shift-applications?bizId=${activeBusiness.id}`)
+      .then(r => r.json())
+      .then((apps: { shiftId: string; employeeId: string; status: string }[]) => {
+        const myPending = apps
+          .filter(a => a.employeeId === user.id && (a.status === 'pending' || a.status === 'approved'))
+          .map(a => a.shiftId)
+        setAppliedShifts(new Set(myPending))
+      })
+      .catch(() => {})
+  }, [activeBusiness?.id, user?.id])
 
   // ─── Work log state ──────────────────────────────────────────────────────────
   const [logs, setLogs] = useState<WorkLog[]>([])
@@ -99,7 +115,30 @@ export default function MyShiftsPage() {
     toast.success('Záznam smazán')
   }
 
-  const handleApply = (shift: Shift) => {
+  const handleApply = async (shift: Shift) => {
+    if (!user || !activeBusiness) return
+    if (isRegistered(activeBusiness.id)) {
+      try {
+        const res = await fetch('/api/shift-applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shiftId: shift.id,
+            employeeId: user.id,
+            employeeName: user.name,
+            bizId: activeBusiness.id,
+          }),
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          toast.error(d.error ?? 'Chyba při přihlášení')
+          return
+        }
+      } catch {
+        toast.error('Chyba připojení')
+        return
+      }
+    }
     setAppliedShifts(prev => new Set(prev).add(shift.id))
     toast.success('Přihláška odeslána!')
   }
@@ -348,13 +387,13 @@ export default function MyShiftsPage() {
             Volné směny — přihlas se
           </h2>
 
-          {OPEN_SHIFTS.length === 0 ? (
+          {openShifts.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center">
               <p className="text-slate-400 text-sm">Žádné volné směny k dispozici.</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {OPEN_SHIFTS.map(shift => {
+              {openShifts.map(shift => {
                 const hasApplied = appliedShifts.has(shift.id)
                 return (
                   <div

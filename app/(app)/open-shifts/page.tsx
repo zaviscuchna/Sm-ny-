@@ -34,7 +34,28 @@ export default function OpenShiftsPage() {
     if (isRegistered(activeBusiness.id)) {
       fetch(`/api/shifts?bizId=${activeBusiness.id}`)
         .then(r => r.json())
-        .then((shifts: Shift[]) => setOpenShifts(shifts.filter(s => s.status === 'open')))
+        .then((shifts: Shift[]) => {
+          const open = shifts.filter(s => s.status === 'open')
+          setOpenShifts(open)
+          // Load applications and reconstruct full ShiftApplication objects
+          return fetch(`/api/shift-applications?bizId=${activeBusiness.id}`)
+            .then(r => r.json())
+            .then((rawApps: { id: string; shiftId: string; employeeId: string; employeeName: string; status: string; createdAt: string }[]) => {
+              const full = rawApps.map(a => ({
+                id: a.id,
+                shift: open.find(s => s.id === a.shiftId) ?? { id: a.shiftId, businessId: activeBusiness.id, date: '', startTime: '', endTime: '', roleNeeded: '', status: 'open' as const },
+                employee: { id: a.employeeId, name: a.employeeName, email: '', role: 'employee' as const, color: '#6366f1' },
+                status: a.status as 'pending' | 'approved' | 'rejected',
+                createdAt: a.createdAt,
+              }))
+              setApps(full)
+              // Pre-populate appliedShifts for current employee
+              if (user) {
+                const mine = full.filter(a => a.employee.id === user.id && (a.status === 'pending' || a.status === 'approved')).map(a => a.shift.id)
+                setAppliedShifts(new Set(mine))
+              }
+            })
+        })
         .catch(() => {})
     } else {
       setOpenShifts(SHIFTS.filter(s => s.status === 'open'))
@@ -43,26 +64,61 @@ export default function OpenShiftsPage() {
   }, [activeBusiness?.id])
   const [expandedShift, setExpandedShift] = useState<string | null>(null)
 
-  const handleApply = (shift: Shift) => {
-    if (!user) return
-    const newApp: ShiftApplication = {
-      id: `app-${Date.now()}`,
-      shift,
-      employee: user,
-      status: 'pending',
-      createdAt: format(new Date(), 'yyyy-MM-dd'),
+  const handleApply = async (shift: Shift) => {
+    if (!user || !activeBusiness) return
+    if (isRegistered(activeBusiness.id)) {
+      try {
+        const res = await fetch('/api/shift-applications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shiftId: shift.id, employeeId: user.id, employeeName: user.name, bizId: activeBusiness.id }),
+        })
+        if (!res.ok) {
+          const d = await res.json()
+          toast.error(d.error ?? 'Chyba při přihlášení')
+          return
+        }
+        const created = await res.json()
+        const newApp: ShiftApplication = { id: created.id, shift, employee: user, status: 'pending', createdAt: created.createdAt }
+        setApps(prev => [...prev, newApp])
+      } catch { toast.error('Chyba připojení'); return }
+    } else {
+      const newApp: ShiftApplication = { id: `app-${Date.now()}`, shift, employee: user, status: 'pending', createdAt: format(new Date(), 'yyyy-MM-dd') }
+      setApps(prev => [...prev, newApp])
     }
-    setApps(prev => [...prev, newApp])
     setAppliedShifts(prev => new Set(prev).add(shift.id))
     toast.success('Přihláška odeslána! Manažer vás bude informovat.')
   }
 
-  const handleApprove = (appId: string) => {
-    setApps(prev => prev.map(a => a.id === appId ? { ...a, status: 'approved' } : a))
+  const handleApprove = async (appId: string) => {
+    const app = apps.find(a => a.id === appId)
+    if (!app) return
+    if (activeBusiness && isRegistered(activeBusiness.id)) {
+      await fetch('/api/shift-applications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: appId, status: 'approved', shiftId: app.shift.id, employeeId: app.employee.id }),
+      })
+      // Remove approved shift from open list (now assigned)
+      setOpenShifts(prev => prev.filter(s => s.id !== app.shift.id))
+      setApps(prev => prev.map(a => a.shift.id === app.shift.id
+        ? { ...a, status: a.id === appId ? 'approved' : 'rejected' }
+        : a
+      ))
+    } else {
+      setApps(prev => prev.map(a => a.id === appId ? { ...a, status: 'approved' } : a))
+    }
     toast.success('Přihláška schválena')
   }
 
-  const handleReject = (appId: string) => {
+  const handleReject = async (appId: string) => {
+    if (activeBusiness && isRegistered(activeBusiness.id)) {
+      await fetch('/api/shift-applications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: appId, status: 'rejected' }),
+      })
+    }
     setApps(prev => prev.map(a => a.id === appId ? { ...a, status: 'rejected' } : a))
     toast.error('Přihláška zamítnuta')
   }

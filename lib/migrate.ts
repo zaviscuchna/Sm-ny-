@@ -49,6 +49,17 @@ export async function runMigrations() {
         "notes"         TEXT
       )
     `)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "ShiftApplication" (
+        "id"            TEXT NOT NULL PRIMARY KEY,
+        "shift_id"      TEXT NOT NULL REFERENCES "Shift"("id"),
+        "employee_id"   TEXT NOT NULL,
+        "employee_name" TEXT NOT NULL,
+        "business_id"   TEXT NOT NULL REFERENCES "Business"("id"),
+        "status"        TEXT NOT NULL DEFAULT 'pending',
+        "created_at"    TEXT NOT NULL
+      )
+    `)
     await client.query(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'`)
     await client.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS password_hash TEXT`)
     console.log('[migrate] Migrations completed')
