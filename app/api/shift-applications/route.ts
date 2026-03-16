@@ -27,11 +27,11 @@ export async function POST(req: NextRequest) {
   const client = await pool.connect()
   try {
     const existing = await client.query(
-      'SELECT id FROM "ShiftApplication" WHERE shift_id = $1 AND employee_id = $2',
+      'SELECT id FROM "ShiftApplication" WHERE shift_id = $1 AND employee_id = $2 AND status = \'pending\'',
       [shiftId, employeeId]
     )
     if (existing.rows.length > 0) {
-      return NextResponse.json({ error: 'Již přihlášen' }, { status: 400 })
+      return NextResponse.json({ error: 'Přihláška již čeká na schválení' }, { status: 400 })
     }
 
     const id = `app-${Date.now()}`
