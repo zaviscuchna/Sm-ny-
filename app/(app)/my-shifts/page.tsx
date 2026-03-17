@@ -26,16 +26,31 @@ export default function MyShiftsPage() {
 
   const todayStr = format(new Date(), 'yyyy-MM-dd')
 
+  const [myShiftsRaw, setMyShiftsRaw] = useState<Shift[]>([])
   const [allBizShifts, setAllBizShifts] = useState<Shift[]>([])
 
   useEffect(() => {
-    if (!activeBusiness) return
-    getShiftsForBusiness(activeBusiness.id).then(setAllBizShifts)
-  }, [activeBusiness?.id])
+    if (!activeBusiness || !user) return
+    if (isRegistered(activeBusiness.id)) {
+      // Fetch only THIS employee's assigned shifts directly from server
+      fetch(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`)
+        .then(r => r.json())
+        .then(setMyShiftsRaw)
+        .catch(() => {})
+      // Also fetch all shifts for the open-shifts section
+      fetch(`/api/shifts?bizId=${activeBusiness.id}`)
+        .then(r => r.json())
+        .then(setAllBizShifts)
+        .catch(() => {})
+    } else {
+      getShiftsForBusiness(activeBusiness.id).then(shifts => {
+        setAllBizShifts(shifts)
+        setMyShiftsRaw(shifts.filter(s => s.assignedEmployee?.id === user.id))
+      })
+    }
+  }, [activeBusiness?.id, user?.id])
 
-  const myShifts = allBizShifts
-    .filter(s => s.assignedEmployee?.id === user?.id)
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const myShifts = myShiftsRaw.sort((a, b) => a.date.localeCompare(b.date))
 
   const upcomingShifts = myShifts.filter(s => s.date >= todayStr)
   const pastShifts     = myShifts.filter(s => s.date < todayStr)

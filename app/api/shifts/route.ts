@@ -5,10 +5,14 @@ export async function GET(req: NextRequest) {
   const bizId = req.nextUrl.searchParams.get('bizId')
   if (!bizId) return NextResponse.json([], { status: 400 })
 
+  const employeeId = req.nextUrl.searchParams.get('employeeId')
+
   const client = await pool.connect()
   try {
     const [shiftsRes, empsRes] = await Promise.all([
-      client.query('SELECT * FROM "Shift" WHERE business_id = $1 ORDER BY date', [bizId]),
+      employeeId
+        ? client.query('SELECT * FROM "Shift" WHERE business_id = $1 AND assigned_employee_id = $2 ORDER BY date', [bizId, employeeId])
+        : client.query('SELECT * FROM "Shift" WHERE business_id = $1 ORDER BY date', [bizId]),
       client.query('SELECT * FROM "User" WHERE business_id = $1', [bizId]),
     ])
 

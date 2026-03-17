@@ -57,15 +57,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) setUser(JSON.parse(stored))
+      if (stored) {
+        const parsedUser = JSON.parse(stored)
+        setUser(parsedUser)
 
-      const storedBizId = sessionStorage.getItem(BIZ_SESSION_KEY)
-      if (storedBizId) {
-        const allBiz = [...BUSINESSES, ...getRegisteredBiz()]
-        const biz = allBiz.find(b => b.id === storedBizId)
-        if (biz) {
-          setActiveBusiness(biz)
-          setJoinCode((biz as any).joinCode ?? null)
+        // Restore active business: sessionStorage first, then fall back to user.businessId
+        // (sessionStorage is cleared when browser closes, so fallback is critical)
+        const storedBizId = sessionStorage.getItem(BIZ_SESSION_KEY)
+          || (parsedUser as any).businessId
+        if (storedBizId) {
+          const allBiz = [...BUSINESSES, ...getRegisteredBiz()]
+          const biz = allBiz.find(b => b.id === storedBizId)
+          if (biz) {
+            setActiveBusiness(biz)
+            setJoinCode((biz as any).joinCode ?? null)
+            sessionStorage.setItem(BIZ_SESSION_KEY, biz.id)
+          }
         }
       }
     } catch {}
