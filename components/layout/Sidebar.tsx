@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard, CalendarDays, Clock, Users,
+  LayoutDashboard, CalendarDays, Calendar, Clock, Users,
   UserCheck, LogOut, Coffee, ChevronRight,
   Building2, ChevronLeft, ShieldCheck, Settings,
 } from 'lucide-react'
@@ -24,6 +24,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard',   label: 'Dashboard',       icon: LayoutDashboard, roles: ['manager'] },
   { href: '/shifts',      label: 'Plán směn',       icon: CalendarDays,    roles: ['manager'] },
+  { href: '/calendar',    label: 'Kalendář',        icon: Calendar,        roles: ['manager', 'employee'] },
   { href: '/open-shifts', label: 'Volné směny',     icon: Clock,           roles: ['manager', 'employee'] },
   { href: '/employees',   label: 'Zaměstnanci',     icon: Users,           roles: ['manager'] },
   { href: '/my-shifts',   label: 'Moje směny',      icon: UserCheck,       roles: ['employee'] },

@@ -130,6 +130,7 @@ export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsC
       : undefined
 
     const dates = generateRepeatDates(date, repeatType, repeatUntil || date, repeatDays)
+    const groupId = repeatType !== 'none' ? `rg-${Date.now()}` : undefined
 
     const newShifts: Shift[] = dates.map((d, i) => ({
       id:               `s-${Date.now()}-${i}`,
@@ -141,6 +142,7 @@ export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsC
       assignedEmployee: employee,
       status:           employee ? 'assigned' : 'open',
       notes:            notes.trim() || undefined,
+      recurringGroupId: groupId,
     }))
 
     // Persist to Supabase for registered businesses

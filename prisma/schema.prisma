@@ -39,6 +39,7 @@ model Shift {
   assigned_employee_id String?
   status               String
   notes                String?
+  recurring_group_id   String?
   business             Business @relation(fields: [business_id], references: [id])
 }
 

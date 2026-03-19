@@ -31,6 +31,7 @@ export interface Shift {
   assignedEmployee?: User
   status: ShiftStatus
   notes?: string
+  recurringGroupId?: string
 }
 
 export interface ShiftApplication {

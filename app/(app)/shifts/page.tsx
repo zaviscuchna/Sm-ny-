@@ -119,6 +119,34 @@ export default function ShiftsPage() {
     toast.success('Směna smazána')
   }
 
+  const handleDeleteSeries = async (groupId: string) => {
+    if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    await fetch(`/api/shifts?groupId=${groupId}`, { method: 'DELETE' })
+    setDbShifts(prev => prev.filter(s => s.recurringGroupId !== groupId))
+    setExtraShifts(prev => prev.filter(s => s.recurringGroupId !== groupId))
+    toast.success('Celá série smazána')
+  }
+
+  const handleEditSeries = async (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => {
+    if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    await fetch('/api/shifts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId, ...fields }),
+    })
+    const update = (s: Shift) => s.recurringGroupId === groupId ? { ...s, ...fields } : s
+    setDbShifts(prev => prev.map(update))
+    setExtraShifts(prev => prev.map(update))
+    toast.success('Celá série upravena')
+  }
+
+  const groupCounts = useMemo(() => {
+    return allShifts.reduce<Record<string, number>>((acc, s) => {
+      if (s.recurringGroupId) acc[s.recurringGroupId] = (acc[s.recurringGroupId] ?? 0) + 1
+      return acc
+    }, {})
+  }, [allShifts])
+
   const selectedDayShifts = allShifts.filter(s => s.date === selectedDateStr)
 
   return (
@@ -210,7 +238,9 @@ export default function ShiftsPage() {
             <>
               {selectedDayShifts.map(shift => (
                 <MobileShiftCard key={shift.id} shift={shift} employees={employees}
-                  onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift} />
+                  onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
+                  onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
+                  seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined} />
               ))}
               <NewShiftDialog
                 defaultDate={selectedDateStr}
@@ -259,7 +289,9 @@ export default function ShiftsPage() {
                     <>
                       {dayShifts.map(shift => (
                     <DesktopShiftCard key={shift.id} shift={shift} employees={employees}
-                      onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift} />
+                      onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
+                      onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
+                      seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined} />
                   ))}
                       <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
                         trigger={
@@ -288,12 +320,17 @@ interface CardProps {
   onAssign: (shiftId: string, employee: User | null) => void
   onDelete: (shiftId: string) => void
   onEdit:   (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'>>) => void
+  onDeleteSeries?: (groupId: string) => void
+  onEditSeries?:   (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => void
+  seriesCount?: number
 }
 
 // ── Mobile shift card ────────────────────────────────────────────────────────
 
-function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardProps) {
+function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount }: CardProps) {
   const [mode, setMode] = useState<'view'|'assign'|'edit'>('view')
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
   const [editRole,  setEditRole]  = useState(shift.roleNeeded)
   const [editStart, setEditStart] = useState(shift.startTime)
   const [editEnd,   setEditEnd]   = useState(shift.endTime)
@@ -303,8 +340,14 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardP
     pending: 'border-l-amber-400',   open: 'border-l-red-400',
   }
   const saveEdit = () => {
-    onEdit(shift.id, { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined })
+    const fields = { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined }
+    if (editSeriesConfirm && shift.recurringGroupId) {
+      onEditSeries?.(shift.recurringGroupId, fields)
+    } else {
+      onEdit(shift.id, fields)
+    }
     setMode('view')
+    setEditSeriesConfirm(false)
   }
   return (
     <div className={`bg-white rounded-2xl border border-slate-100 border-l-4 ${accent[shift.status] ?? 'border-l-slate-200'} shadow-sm p-4`}>
@@ -326,11 +369,18 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardP
           </div>
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
             className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+            <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600" />
+              Upravit celou sérii ({seriesCount}×)
+            </label>
+          )}
           <div className="flex gap-2">
             <button onClick={saveEdit} className="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-xl py-2 hover:bg-indigo-700 transition-colors">
               <Check className="w-3.5 h-3.5" /> Uložit
             </button>
-            <button onClick={() => setMode('view')} className="px-3 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs hover:bg-slate-50 transition-colors">
+            <button onClick={() => { setMode('view'); setEditSeriesConfirm(false) }} className="px-3 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs hover:bg-slate-50 transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -362,7 +412,7 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardP
             </div>
             <div className="flex flex-col items-end gap-1.5">
               <ShiftStatusBadge status={shift.status} />
-              <div className="flex gap-1">
+              <div className="flex gap-1 relative">
                 <button onClick={() => setMode(mode === 'assign' ? 'view' : 'assign')} title="Přiřadit zaměstnance"
                   className={`p-1.5 rounded-lg transition-colors ${mode === 'assign' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'}`}>
                   <UserCheck className="w-3.5 h-3.5" />
@@ -371,10 +421,31 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardP
                   title="Upravit směnu" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => onDelete(shift.id)} title="Smazat směnu"
+                <button onClick={() => shift.recurringGroupId ? setDeleteConfirm(true) : onDelete(shift.id)} title="Smazat směnu"
                   className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
+                {deleteConfirm && (
+                  <div className="absolute right-0 top-full z-30 mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-xl p-3">
+                    <p className="text-xs font-semibold text-slate-700 mb-2">Smazat směnu?</p>
+                    <div className="flex flex-col gap-1.5">
+                      <button onClick={() => { onDelete(shift.id); setDeleteConfirm(false) }}
+                        className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
+                        Jen tuto směnu
+                      </button>
+                      {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+                        <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
+                          className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                          Celou sérii ({seriesCount}×)
+                        </button>
+                      )}
+                      <button onClick={() => setDeleteConfirm(false)}
+                        className="text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-left transition-colors">
+                        Zrušit
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -407,8 +478,10 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardP
 
 // ── Desktop shift card ────────────────────────────────────────────────────────
 
-function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit }: CardProps) {
+function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount }: CardProps) {
   const [showAssign, setShowAssign] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [showEditMenu, setShowEditMenu] = useState(false)
   return (
     <div className={`rounded-xl border border-slate-100 border-l-4 p-2.5 shadow-sm ${STATUS_COLORS[shift.status] ?? 'bg-slate-50'} relative group`}>
       <div className="flex items-center gap-1 mb-1">
@@ -435,15 +508,15 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit }: Card
       <div className="mt-1.5 flex items-center justify-between">
         <ShiftStatusBadge status={shift.status} />
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => setShowAssign(v => !v)} title="Přiřadit"
+          <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditMenu(false) }} title="Přiřadit"
             className="p-1 rounded text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 transition-colors">
             <UserCheck className="w-3 h-3" />
           </button>
-          <button onClick={() => { const r = prompt('Pozice:', shift.roleNeeded); if (r !== null) onEdit(shift.id, { roleNeeded: r }) }} title="Upravit"
+          <button onClick={() => { setShowEditMenu(v => !v); setDeleteConfirm(false); setShowAssign(false) }} title="Upravit"
             className="p-1 rounded text-slate-400 hover:bg-amber-100 hover:text-amber-600 transition-colors">
             <Pencil className="w-3 h-3" />
           </button>
-          <button onClick={() => onDelete(shift.id)} title="Smazat"
+          <button onClick={() => { shift.recurringGroupId ? (setDeleteConfirm(v => !v), setShowAssign(false), setShowEditMenu(false)) : onDelete(shift.id) }} title="Smazat"
             className="p-1 rounded text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
@@ -469,6 +542,42 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit }: Card
               </button>
             ))}
           </div>
+        </div>
+      )}
+      {showEditMenu && (
+        <div className="absolute top-full left-0 z-20 mt-1 w-48 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-100">
+            <p className="text-[11px] font-semibold text-slate-500">Upravit</p>
+          </div>
+          <button onClick={() => { const r = prompt('Pozice:', shift.roleNeeded); if (r !== null) { onEdit(shift.id, { roleNeeded: r }); setShowEditMenu(false) } }}
+            className="w-full text-left text-xs px-3 py-2 hover:bg-amber-50 text-slate-700 transition-colors">
+            Jen tuto směnu
+          </button>
+          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+            <button onClick={() => { const r = prompt('Pozice pro celou sérii:', shift.roleNeeded); if (r !== null) { onEditSeries?.(shift.recurringGroupId!, { roleNeeded: r }); setShowEditMenu(false) } }}
+              className="w-full text-left text-xs px-3 py-2 hover:bg-amber-50 text-amber-700 font-semibold transition-colors">
+              Celou sérii ({seriesCount}×)
+            </button>
+          )}
+        </div>
+      )}
+      {deleteConfirm && (
+        <div className="absolute top-full right-0 z-20 mt-1 w-48 bg-white rounded-xl border border-slate-200 shadow-lg p-2.5">
+          <p className="text-[11px] font-semibold text-slate-700 mb-2 px-1">Smazat směnu?</p>
+          <button onClick={() => { onDelete(shift.id); setDeleteConfirm(false) }}
+            className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors mb-1">
+            Jen tuto směnu
+          </button>
+          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+            <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
+              className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold transition-colors mb-1">
+              Celou sérii ({seriesCount}×)
+            </button>
+          )}
+          <button onClick={() => setDeleteConfirm(false)}
+            className="w-full text-left text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors">
+            Zrušit
+          </button>
         </div>
       )}
     </div>

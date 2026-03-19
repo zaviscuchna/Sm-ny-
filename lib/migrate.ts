@@ -62,6 +62,7 @@ export async function runMigrations() {
     `)
     await client.query(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'`)
     await client.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS password_hash TEXT`)
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS recurring_group_id TEXT`)
     console.log('[migrate] Migrations completed')
   } catch (e) {
     console.error('[migrate] Migration error:', e)

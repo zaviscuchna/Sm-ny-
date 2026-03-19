@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
       roleNeeded:       row.role_needed,
       status:           row.status,
       notes:            row.notes ?? undefined,
+      recurringGroupId: row.recurring_group_id ?? undefined,
       assignedEmployee: row.assigned_employee_id
         ? (() => {
             const e = empMap[row.assigned_employee_id]
@@ -43,8 +44,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, assignedEmployeeId, status, roleNeeded, startTime, endTime, date, notes } = await req.json()
-  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const { id, groupId, assignedEmployeeId, status, roleNeeded, startTime, endTime, date, notes } = await req.json()
+  if (!id && !groupId) return NextResponse.json({ error: 'Missing id or groupId' }, { status: 400 })
   const client = await pool.connect()
   try {
     const sets: string[] = []
@@ -55,11 +56,13 @@ export async function PATCH(req: NextRequest) {
     if (roleNeeded  !== undefined) { sets.push(`role_needed = $${idx++}`); vals.push(roleNeeded) }
     if (startTime   !== undefined) { sets.push(`start_time = $${idx++}`);  vals.push(startTime) }
     if (endTime     !== undefined) { sets.push(`end_time = $${idx++}`);    vals.push(endTime) }
-    if (date        !== undefined) { sets.push(`date = $${idx++}`);        vals.push(date) }
+    // date only applies to single shift edits, not group edits
+    if (date !== undefined && !groupId) { sets.push(`date = $${idx++}`); vals.push(date) }
     if (notes       !== undefined) { sets.push(`notes = $${idx++}`);       vals.push(notes) }
     if (sets.length > 0) {
-      vals.push(id)
-      await client.query(`UPDATE "Shift" SET ${sets.join(', ')} WHERE id = $${idx}`, vals)
+      vals.push(groupId ?? id)
+      const where = groupId ? `recurring_group_id = $${idx}` : `id = $${idx}`
+      await client.query(`UPDATE "Shift" SET ${sets.join(', ')} WHERE ${where}`, vals)
     }
     return NextResponse.json({ ok: true })
   } finally {
@@ -68,12 +71,21 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const id      = req.nextUrl.searchParams.get('id')
+  const groupId = req.nextUrl.searchParams.get('groupId')
+  if (!id && !groupId) return NextResponse.json({ error: 'Missing id or groupId' }, { status: 400 })
   const client = await pool.connect()
   try {
-    await client.query('DELETE FROM "ShiftApplication" WHERE shift_id = $1', [id])
-    await client.query('DELETE FROM "Shift" WHERE id = $1', [id])
+    if (groupId) {
+      const { rows } = await client.query('SELECT id FROM "Shift" WHERE recurring_group_id = $1', [groupId])
+      for (const row of rows) {
+        await client.query('DELETE FROM "ShiftApplication" WHERE shift_id = $1', [row.id])
+      }
+      await client.query('DELETE FROM "Shift" WHERE recurring_group_id = $1', [groupId])
+    } else {
+      await client.query('DELETE FROM "ShiftApplication" WHERE shift_id = $1', [id])
+      await client.query('DELETE FROM "Shift" WHERE id = $1', [id])
+    }
     return NextResponse.json({ ok: true })
   } finally {
     client.release()
@@ -86,9 +98,9 @@ export async function POST(req: NextRequest) {
   try {
     for (const s of shifts) {
       await client.query(
-        `INSERT INTO "Shift" (id, business_id, date, start_time, end_time, role_needed, assigned_employee_id, status, notes)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [s.id, s.businessId, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null]
+        `INSERT INTO "Shift" (id, business_id, date, start_time, end_time, role_needed, assigned_employee_id, status, notes, recurring_group_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [s.id, s.businessId, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null, s.recurringGroupId ?? null]
       )
     }
     return NextResponse.json({ ok: true })
