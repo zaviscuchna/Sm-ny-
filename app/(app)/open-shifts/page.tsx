@@ -242,7 +242,7 @@ export default function OpenShiftsPage() {
               const isExpanded = expandedShift === shift.id
 
               return (
-                <div key={shift.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+                <div key={shift.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm">
                   {/* Header */}
                   <div className="p-5 flex gap-4 items-start">
                     <div className="flex-shrink-0 w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
@@ -301,10 +301,10 @@ export default function OpenShiftsPage() {
                                           className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
                                           Jen tuto směnu
                                         </button>
-                                        {shift.recurringGroupId && (groupCounts[shift.recurringGroupId] ?? 0) > 1 && (
+                                        {shift.recurringGroupId && (
                                           <button onClick={() => handleDeleteShift(shift, true)}
                                             className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
-                                            Celou sérii ({groupCounts[shift.recurringGroupId]}×)
+                                            Celou sérii{groupCounts[shift.recurringGroupId] > 1 ? ` (${groupCounts[shift.recurringGroupId]}×)` : ''}
                                           </button>
                                         )}
                                         <button onClick={() => setDeleteConfirm(null)}
@@ -343,7 +343,7 @@ export default function OpenShiftsPage() {
                                   <><UserPlus className="w-3.5 h-3.5 mr-1" />Přihlásit se</>
                                 )}
                               </Button>
-                              {shift.recurringGroupId && (groupCounts[shift.recurringGroupId] ?? 0) > 1 && (
+                              {shift.recurringGroupId && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -358,7 +358,9 @@ export default function OpenShiftsPage() {
                                   <Repeat className="w-3 h-3 mr-1" />
                                   {appliedGroups.has(shift.recurringGroupId)
                                     ? 'Série přihlášena'
-                                    : `Celá série (${groupCounts[shift.recurringGroupId]}×)`
+                                    : groupCounts[shift.recurringGroupId] > 1
+                                      ? `Celá série (${groupCounts[shift.recurringGroupId]}×)`
+                                      : 'Celá série'
                                   }
                                 </Button>
                               )}
@@ -397,11 +399,11 @@ export default function OpenShiftsPage() {
                             className="w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                         </div>
                       </div>
-                      {shift.recurringGroupId && (groupCounts[shift.recurringGroupId] ?? 0) > 1 && (
+                      {shift.recurringGroupId && (
                         <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
                           <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
                             className="rounded border-slate-300 text-indigo-600" />
-                          Upravit celou sérii ({groupCounts[shift.recurringGroupId]}×)
+                          Upravit celou sérii{groupCounts[shift.recurringGroupId] > 1 ? ` (${groupCounts[shift.recurringGroupId]}×)` : ''}
                         </label>
                       )}
                       <div className="flex gap-2">

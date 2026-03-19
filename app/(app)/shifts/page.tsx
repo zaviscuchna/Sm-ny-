@@ -369,11 +369,11 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
           </div>
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
             className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+          {shift.recurringGroupId && (
             <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
               <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
                 className="rounded border-slate-300 text-indigo-600" />
-              Upravit celou sérii ({seriesCount}×)
+              Upravit celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
             </label>
           )}
           <div className="flex gap-2">
@@ -433,10 +433,10 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
                         className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
                         Jen tuto směnu
                       </button>
-                      {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+                      {shift.recurringGroupId && (
                         <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
                           className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
-                          Celou sérii ({seriesCount}×)
+                          Celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
                         </button>
                       )}
                       <button onClick={() => setDeleteConfirm(false)}
@@ -481,7 +481,26 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
 function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount }: CardProps) {
   const [showAssign, setShowAssign] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [showEditMenu, setShowEditMenu] = useState(false)
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [editRole,  setEditRole]  = useState(shift.roleNeeded)
+  const [editStart, setEditStart] = useState(shift.startTime)
+  const [editEnd,   setEditEnd]   = useState(shift.endTime)
+  const [editNotes, setEditNotes] = useState(shift.notes ?? '')
+  const [editSeries, setEditSeries] = useState(false)
+
+  const openEdit = () => {
+    setEditRole(shift.roleNeeded); setEditStart(shift.startTime)
+    setEditEnd(shift.endTime); setEditNotes(shift.notes ?? '')
+    setEditSeries(false); setShowEditForm(true)
+    setDeleteConfirm(false); setShowAssign(false)
+  }
+  const saveEdit = () => {
+    const fields = { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined }
+    if (editSeries && shift.recurringGroupId) onEditSeries?.(shift.recurringGroupId, fields)
+    else onEdit(shift.id, fields)
+    setShowEditForm(false)
+  }
+
   return (
     <div className={`rounded-xl border border-slate-100 border-l-4 p-2.5 shadow-sm ${STATUS_COLORS[shift.status] ?? 'bg-slate-50'} relative group`}>
       <div className="flex items-center gap-1 mb-1">
@@ -508,15 +527,15 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
       <div className="mt-1.5 flex items-center justify-between">
         <ShiftStatusBadge status={shift.status} />
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditMenu(false) }} title="Přiřadit"
+          <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditForm(false) }} title="Přiřadit"
             className="p-1 rounded text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 transition-colors">
             <UserCheck className="w-3 h-3" />
           </button>
-          <button onClick={() => { setShowEditMenu(v => !v); setDeleteConfirm(false); setShowAssign(false) }} title="Upravit"
+          <button onClick={openEdit} title="Upravit"
             className="p-1 rounded text-slate-400 hover:bg-amber-100 hover:text-amber-600 transition-colors">
             <Pencil className="w-3 h-3" />
           </button>
-          <button onClick={() => { shift.recurringGroupId ? (setDeleteConfirm(v => !v), setShowAssign(false), setShowEditMenu(false)) : onDelete(shift.id) }} title="Smazat"
+          <button onClick={() => { shift.recurringGroupId ? setDeleteConfirm(v => !v) : onDelete(shift.id); setShowAssign(false); setShowEditForm(false) }} title="Smazat"
             className="p-1 rounded text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
@@ -544,21 +563,42 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
           </div>
         </div>
       )}
-      {showEditMenu && (
-        <div className="absolute top-full left-0 z-20 mt-1 w-48 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-100">
-            <p className="text-[11px] font-semibold text-slate-500">Upravit</p>
+      {showEditForm && (
+        <div className="absolute top-full left-0 z-20 mt-1 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-3 space-y-2">
+          <p className="text-[11px] font-semibold text-slate-600">Upravit směnu</p>
+          <input value={editRole} onChange={e => setEditRole(e.target.value)} placeholder="Pozice"
+            className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          <div className="grid grid-cols-2 gap-1.5">
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-0.5">Začátek</label>
+              <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
+                className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-0.5">Konec</label>
+              <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            </div>
           </div>
-          <button onClick={() => { const r = prompt('Pozice:', shift.roleNeeded); if (r !== null) { onEdit(shift.id, { roleNeeded: r }); setShowEditMenu(false) } }}
-            className="w-full text-left text-xs px-3 py-2 hover:bg-amber-50 text-slate-700 transition-colors">
-            Jen tuto směnu
-          </button>
-          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
-            <button onClick={() => { const r = prompt('Pozice pro celou sérii:', shift.roleNeeded); if (r !== null) { onEditSeries?.(shift.recurringGroupId!, { roleNeeded: r }); setShowEditMenu(false) } }}
-              className="w-full text-left text-xs px-3 py-2 hover:bg-amber-50 text-amber-700 font-semibold transition-colors">
-              Celou sérii ({seriesCount}×)
-            </button>
+          <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
+            className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          {shift.recurringGroupId && seriesCount && (
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={editSeries} onChange={e => setEditSeries(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600" />
+              Celou sérii{seriesCount > 1 ? ` (${seriesCount}×)` : ''}
+            </label>
           )}
+          <div className="flex gap-1.5 pt-0.5">
+            <button onClick={saveEdit}
+              className="flex-1 flex items-center justify-center gap-1 bg-indigo-600 text-white text-[11px] font-semibold rounded-lg py-1.5 hover:bg-indigo-700 transition-colors">
+              <Check className="w-3 h-3" /> Uložit
+            </button>
+            <button onClick={() => setShowEditForm(false)}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-[11px] hover:bg-slate-50 transition-colors">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       )}
       {deleteConfirm && (
