@@ -78,6 +78,13 @@ export default function OpenShiftsPage() {
     return acc
   }, {})
 
+  // Count shifts with same role+time (for shifts without recurringGroupId)
+  const similarCounts = openShifts.reduce<Record<string, number>>((acc, s) => {
+    const key = `${s.businessId}|${s.roleNeeded}|${s.startTime}|${s.endTime}`
+    acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
+
   const handleApplySeries = async (shift: Shift) => {
     if (!user || !activeBusiness || !shift.recurringGroupId) return
     if (!isRegistered(activeBusiness.id)) {
@@ -197,6 +204,16 @@ export default function OpenShiftsPage() {
     setEditingShift(null)
   }
 
+  const handleDeleteSimilar = async (shift: Shift) => {
+    if (activeBusiness && isRegistered(activeBusiness.id)) {
+      const params = new URLSearchParams({ bizId: shift.businessId, roleNeeded: shift.roleNeeded, startTime: shift.startTime, endTime: shift.endTime })
+      await fetch(`/api/shifts?${params}`, { method: 'DELETE' })
+      setOpenShifts(prev => prev.filter(s => !(s.businessId === shift.businessId && s.roleNeeded === shift.roleNeeded && s.startTime === shift.startTime && s.endTime === shift.endTime)))
+      toast.success('Všechny opakující se směny smazány')
+    }
+    setDeleteConfirm(null)
+  }
+
   const handleDeleteShift = async (shift: Shift, series = false) => {
     if (activeBusiness && isRegistered(activeBusiness.id)) {
       if (series && shift.recurringGroupId) {
@@ -294,23 +311,31 @@ export default function OpenShiftsPage() {
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                   {deleteConfirm === shift.id && (
-                                    <div className="absolute right-0 top-full z-30 mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-xl p-3">
-                                      <p className="text-xs font-semibold text-slate-700 mb-2">Smazat směnu?</p>
-                                      <div className="flex flex-col gap-1.5">
-                                        <button onClick={() => handleDeleteShift(shift, false)}
-                                          className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
-                                          Jen tuto směnu
-                                        </button>
-                                        {shift.recurringGroupId && (
-                                          <button onClick={() => handleDeleteShift(shift, true)}
-                                            className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
-                                            Celou sérii{groupCounts[shift.recurringGroupId] > 1 ? ` (${groupCounts[shift.recurringGroupId]}×)` : ''}
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setDeleteConfirm(null)}>
+                                      <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-3 w-52" onClick={e => e.stopPropagation()}>
+                                        <p className="text-xs font-semibold text-slate-700 mb-2">Smazat směnu?</p>
+                                        <div className="flex flex-col gap-1.5">
+                                          <button onClick={() => { handleDeleteShift(shift, false); setDeleteConfirm(null) }}
+                                            className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
+                                            Jen tuto směnu
                                           </button>
-                                        )}
-                                        <button onClick={() => setDeleteConfirm(null)}
-                                          className="text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-left transition-colors">
-                                          Zrušit
-                                        </button>
+                                          {shift.recurringGroupId && (
+                                            <button onClick={() => handleDeleteShift(shift, true)}
+                                              className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                                              Celou sérii{groupCounts[shift.recurringGroupId] > 1 ? ` (${groupCounts[shift.recurringGroupId]}×)` : ''}
+                                            </button>
+                                          )}
+                                          {!shift.recurringGroupId && similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`] > 1 && (
+                                            <button onClick={() => handleDeleteSimilar(shift)}
+                                              className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                                              Všechny stejné ({similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}×)
+                                            </button>
+                                          )}
+                                          <button onClick={() => setDeleteConfirm(null)}
+                                            className="text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-left transition-colors">
+                                            Zrušit
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   )}
