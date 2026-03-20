@@ -147,6 +147,24 @@ export default function ShiftsPage() {
     }, {})
   }, [allShifts])
 
+  const similarCounts = useMemo(() => {
+    return allShifts.reduce<Record<string, number>>((acc, s) => {
+      const key = `${s.businessId}|${s.roleNeeded}|${s.startTime}|${s.endTime}`
+      acc[key] = (acc[key] ?? 0) + 1
+      return acc
+    }, {})
+  }, [allShifts])
+
+  const handleDeleteSimilar = async (shift: Shift) => {
+    if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    const params = new URLSearchParams({ bizId: shift.businessId, roleNeeded: shift.roleNeeded, startTime: shift.startTime, endTime: shift.endTime })
+    await fetch(`/api/shifts?${params}`, { method: 'DELETE' })
+    const sameKey = (s: Shift) => s.businessId === shift.businessId && s.roleNeeded === shift.roleNeeded && s.startTime === shift.startTime && s.endTime === shift.endTime
+    setDbShifts(prev => prev.filter(s => !sameKey(s)))
+    setExtraShifts(prev => prev.filter(s => !sameKey(s)))
+    toast.success('Všechny opakující se směny smazány')
+  }
+
   const selectedDayShifts = allShifts.filter(s => s.date === selectedDateStr)
 
   return (
@@ -240,7 +258,9 @@ export default function ShiftsPage() {
                 <MobileShiftCard key={shift.id} shift={shift} employees={employees}
                   onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
                   onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
-                  seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined} />
+                  seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined}
+                  similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
+                  onDeleteSimilar={() => handleDeleteSimilar(shift)} />
               ))}
               <NewShiftDialog
                 defaultDate={selectedDateStr}
@@ -291,7 +311,9 @@ export default function ShiftsPage() {
                     <DesktopShiftCard key={shift.id} shift={shift} employees={employees}
                       onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
                       onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
-                      seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined} />
+                      seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined}
+                      similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
+                      onDeleteSimilar={() => handleDeleteSimilar(shift)} />
                   ))}
                       <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
                         trigger={
@@ -323,11 +345,13 @@ interface CardProps {
   onDeleteSeries?: (groupId: string) => void
   onEditSeries?:   (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => void
   seriesCount?: number
+  similarCount?: number
+  onDeleteSimilar?: () => void
 }
 
 // ── Mobile shift card ────────────────────────────────────────────────────────
 
-function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount }: CardProps) {
+function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
   const [mode, setMode] = useState<'view'|'assign'|'edit'>('view')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
@@ -439,6 +463,12 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
                           Celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
                         </button>
                       )}
+                      {!shift.recurringGroupId && similarCount && similarCount > 1 && (
+                        <button onClick={() => { onDeleteSimilar?.(); setDeleteConfirm(false) }}
+                          className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                          Všechny stejné ({similarCount}×)
+                        </button>
+                      )}
                       <button onClick={() => setDeleteConfirm(false)}
                         className="text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-left transition-colors">
                         Zrušit
@@ -478,7 +508,7 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
 
 // ── Desktop shift card ────────────────────────────────────────────────────────
 
-function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount }: CardProps) {
+function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
   const [showAssign, setShowAssign] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -612,6 +642,12 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
             <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
               className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold transition-colors mb-1">
               Celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
+            </button>
+          )}
+          {!shift.recurringGroupId && similarCount && similarCount > 1 && (
+            <button onClick={() => { onDeleteSimilar?.(); setDeleteConfirm(false) }}
+              className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold transition-colors mb-1">
+              Všechny stejné ({similarCount}×)
             </button>
           )}
           <button onClick={() => setDeleteConfirm(false)}

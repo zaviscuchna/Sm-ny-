@@ -71,12 +71,31 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const id      = req.nextUrl.searchParams.get('id')
-  const groupId = req.nextUrl.searchParams.get('groupId')
-  if (!id && !groupId) return NextResponse.json({ error: 'Missing id or groupId' }, { status: 400 })
+  const id          = req.nextUrl.searchParams.get('id')
+  const groupId     = req.nextUrl.searchParams.get('groupId')
+  const bizId       = req.nextUrl.searchParams.get('bizId')
+  const roleNeeded  = req.nextUrl.searchParams.get('roleNeeded')
+  const startTime   = req.nextUrl.searchParams.get('startTime')
+  const endTime     = req.nextUrl.searchParams.get('endTime')
+
+  if (!id && !groupId && !(bizId && roleNeeded && startTime && endTime))
+    return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+
   const client = await pool.connect()
   try {
-    if (groupId) {
+    if (bizId && roleNeeded && startTime && endTime) {
+      const { rows } = await client.query(
+        'SELECT id FROM "Shift" WHERE business_id = $1 AND role_needed = $2 AND start_time = $3 AND end_time = $4',
+        [bizId, roleNeeded, startTime, endTime]
+      )
+      for (const row of rows) {
+        await client.query('DELETE FROM "ShiftApplication" WHERE shift_id = $1', [row.id])
+      }
+      await client.query(
+        'DELETE FROM "Shift" WHERE business_id = $1 AND role_needed = $2 AND start_time = $3 AND end_time = $4',
+        [bizId, roleNeeded, startTime, endTime]
+      )
+    } else if (groupId) {
       const { rows } = await client.query('SELECT id FROM "Shift" WHERE recurring_group_id = $1', [groupId])
       for (const row of rows) {
         await client.query('DELETE FROM "ShiftApplication" WHERE shift_id = $1', [row.id])
