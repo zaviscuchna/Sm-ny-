@@ -608,10 +608,10 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
             className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors mb-1">
             Jen tuto směnu
           </button>
-          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+          {shift.recurringGroupId && (
             <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
               className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold transition-colors mb-1">
-              Celou sérii ({seriesCount}×)
+              Celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
             </button>
           )}
           <button onClick={() => setDeleteConfirm(false)}
