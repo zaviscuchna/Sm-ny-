@@ -633,8 +633,10 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
         </div>
       )}
       {deleteConfirm && (
-        <div className="absolute top-full right-0 z-20 mt-1 w-48 bg-white rounded-xl border border-slate-200 shadow-lg p-2.5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setDeleteConfirm(false)}>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-3 w-52" onClick={e => e.stopPropagation()}>
           <p className="text-[11px] font-semibold text-slate-700 mb-2 px-1">Smazat směnu?</p>
+          <p className="text-[10px] text-slate-400 mb-1 px-1">sim:{similarCount ?? 'x'} grp:{shift.recurringGroupId ?? 'x'}</p>
           <button onClick={() => { onDelete(shift.id); setDeleteConfirm(false) }}
             className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors mb-1">
             Jen tuto směnu
@@ -655,6 +657,7 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
             className="w-full text-left text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors">
             Zrušit
           </button>
+          </div>
         </div>
       )}
     </div>
