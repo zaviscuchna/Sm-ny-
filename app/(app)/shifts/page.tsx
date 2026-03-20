@@ -445,7 +445,7 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
                   title="Upravit směnu" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => shift.recurringGroupId ? setDeleteConfirm(true) : onDelete(shift.id)} title="Smazat směnu"
+                <button onClick={() => (shift.recurringGroupId || (similarCount && similarCount > 1)) ? setDeleteConfirm(true) : onDelete(shift.id)} title="Smazat směnu"
                   className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -565,7 +565,7 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
             className="p-1 rounded text-slate-400 hover:bg-amber-100 hover:text-amber-600 transition-colors">
             <Pencil className="w-3 h-3" />
           </button>
-          <button onClick={() => { shift.recurringGroupId ? setDeleteConfirm(v => !v) : onDelete(shift.id); setShowAssign(false); setShowEditForm(false) }} title="Smazat"
+          <button onClick={() => { (shift.recurringGroupId || (similarCount && similarCount > 1)) ? setDeleteConfirm(v => !v) : onDelete(shift.id); setShowAssign(false); setShowEditForm(false) }} title="Smazat"
             className="p-1 rounded text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
