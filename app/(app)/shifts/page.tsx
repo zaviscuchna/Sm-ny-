@@ -25,10 +25,10 @@ function getDuration(start: string, end: string) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  confirmed: 'border-l-green-400 bg-green-50',
-  assigned:  'border-l-blue-400 bg-blue-50',
-  pending:   'border-l-amber-400 bg-amber-50',
-  open:      'border-l-red-300 bg-red-50',
+  confirmed: 'border-l-green-400 bg-green-50 dark:bg-green-900/20',
+  assigned:  'border-l-blue-400 bg-blue-50 dark:bg-blue-900/20',
+  pending:   'border-l-amber-400 bg-amber-50 dark:bg-amber-900/20',
+  open:      'border-l-red-300 bg-red-50 dark:bg-red-900/20',
 }
 
 export default function ShiftsPage() {
@@ -174,19 +174,19 @@ export default function ShiftsPage() {
       {/* ── WEEK NAV (shared) ───────────────────────────────────────────── */}
       <div className="px-4 md:px-8 pt-5 pb-0 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200"
+          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200 dark:border-slate-700"
             onClick={() => setWeekOffset(o => o - 1)}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="text-sm font-semibold text-slate-700 px-1">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 px-1">
             {format(weekStart, 'd. M.', { locale: cs })} — {format(addDays(weekStart, 6), 'd. M. yyyy', { locale: cs })}
           </div>
-          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200"
+          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200 dark:border-slate-700"
             onClick={() => setWeekOffset(o => o + 1)}>
             <ChevronRight className="w-4 h-4" />
           </Button>
           {weekOffset !== 0 && (
-            <Button variant="ghost" size="sm" className="text-xs text-indigo-600 hidden sm:inline-flex"
+            <Button variant="ghost" size="sm" className="text-xs text-indigo-600 dark:text-indigo-400 hidden sm:inline-flex"
               onClick={() => setWeekOffset(0)}>
               Tento týden
             </Button>
@@ -211,13 +211,13 @@ export default function ShiftsPage() {
                 className={`flex flex-col items-center gap-1 px-3.5 py-2.5 rounded-2xl shrink-0 transition-all ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                    : 'bg-white border border-slate-100 text-slate-600 hover:border-indigo-200'
+                    : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-indigo-200 dark:hover:border-indigo-700'
                 }`}
               >
-                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isActive ? 'text-indigo-200' : 'text-slate-400'}`}>
+                <span className={`text-[10px] font-semibold uppercase tracking-wide ${isActive ? 'text-indigo-200' : 'text-slate-400 dark:text-slate-500'}`}>
                   {label}
                 </span>
-                <span className={`text-lg font-black leading-none ${isToday && !isActive ? 'text-indigo-600' : ''}`}>
+                <span className={`text-lg font-black leading-none ${isToday && !isActive ? 'text-indigo-600 dark:text-indigo-400' : ''}`}>
                   {dayNum}
                 </span>
                 <span className={`w-1.5 h-1.5 rounded-full transition-colors ${
@@ -233,10 +233,10 @@ export default function ShiftsPage() {
         {/* Selected day shifts */}
         <div className="flex-1 px-4 pb-6 space-y-3">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="text-sm font-semibold text-slate-700">
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
               {format(new Date(selectedDateStr + 'T12:00:00'), 'EEEE d. MMMM', { locale: cs })}
             </h2>
-            <span className="text-xs text-slate-400">{selectedDayShifts.length} směn</span>
+            <span className="text-xs text-slate-400 dark:text-slate-500">{selectedDayShifts.length} směn</span>
           </div>
 
           {selectedDayShifts.length === 0 ? (
@@ -244,7 +244,7 @@ export default function ShiftsPage() {
               defaultDate={selectedDateStr}
               employees={employees} onShiftsCreated={handleShiftsCreated}
               trigger={
-                <button className="w-full border-2 border-dashed border-slate-200 rounded-2xl py-10 flex flex-col items-center gap-2 text-slate-400 hover:border-indigo-300 hover:text-indigo-400 transition-all">
+                <button className="w-full border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl py-10 flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-400 dark:hover:border-indigo-700 dark:hover:text-indigo-400 transition-all">
                   <div className="w-10 h-10 rounded-full border-2 border-dashed border-current flex items-center justify-center">
                     <Plus className="w-5 h-5" />
                   </div>
@@ -266,7 +266,7 @@ export default function ShiftsPage() {
                 defaultDate={selectedDateStr}
                 employees={employees} onShiftsCreated={handleShiftsCreated}
                 trigger={
-                  <button className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-200 rounded-2xl py-3 text-sm text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all">
+                  <button className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl py-3 text-sm text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-500 dark:hover:border-indigo-700 dark:hover:text-indigo-400 transition-all">
                     <Plus className="w-4 h-4" /> Přidat další směnu
                   </button>
                 }
@@ -285,12 +285,12 @@ export default function ShiftsPage() {
 
             return (
               <div key={dateStr} className="flex flex-col gap-2">
-                <div className={`text-center pb-2 border-b ${isToday ? 'border-indigo-300' : 'border-slate-100'}`}>
-                  <p className={`text-[11px] font-semibold uppercase tracking-wide ${isToday ? 'text-indigo-600' : 'text-slate-400'}`}>
+                <div className={`text-center pb-2 border-b ${isToday ? 'border-indigo-300 dark:border-indigo-700' : 'border-slate-100 dark:border-slate-800'}`}>
+                  <p className={`text-[11px] font-semibold uppercase tracking-wide ${isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`}>
                     {label}
                   </p>
                   <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold mt-0.5 ${
-                    isToday ? 'bg-indigo-600 text-white' : 'text-slate-700'
+                    isToday ? 'bg-indigo-600 text-white' : 'text-slate-700 dark:text-slate-300'
                   }`}>
                     {dayNum}
                   </div>
@@ -300,7 +300,7 @@ export default function ShiftsPage() {
                   {dayShifts.length === 0 ? (
                     <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
                       trigger={
-                        <button className="w-full h-16 border-2 border-dashed border-slate-100 rounded-xl text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all text-xs flex flex-col items-center justify-center gap-1">
+                        <button className="w-full h-16 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-slate-300 dark:text-slate-600 hover:border-indigo-200 dark:hover:border-indigo-800 hover:text-indigo-400 dark:hover:text-indigo-500 transition-all text-xs flex flex-col items-center justify-center gap-1">
                           <span className="text-lg leading-none">+</span>
                         </button>
                       }
@@ -317,7 +317,7 @@ export default function ShiftsPage() {
                   ))}
                       <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
                         trigger={
-                          <button className="w-full h-7 border border-dashed border-slate-100 rounded-lg text-slate-300 hover:border-indigo-200 hover:text-indigo-400 transition-all text-xs flex items-center justify-center">
+                          <button className="w-full h-7 border border-dashed border-slate-100 dark:border-slate-800 rounded-lg text-slate-300 dark:text-slate-600 hover:border-indigo-200 dark:hover:border-indigo-800 hover:text-indigo-400 dark:hover:text-indigo-500 transition-all text-xs flex items-center justify-center">
                             <span className="text-sm leading-none">+</span>
                           </button>
                         }
@@ -374,27 +374,27 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
     setEditSeriesConfirm(false)
   }
   return (
-    <div className={`bg-white rounded-2xl border border-slate-100 border-l-4 ${accent[shift.status] ?? 'border-l-slate-200'} shadow-sm p-4`}>
+    <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 border-l-4 ${accent[shift.status] ?? 'border-l-slate-200'} shadow-sm p-4`}>
       {mode === 'edit' ? (
         <div className="space-y-2">
           <input value={editRole} onChange={e => setEditRole(e.target.value)} placeholder="Pozice"
-            className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Začátek</label>
+              <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Začátek</label>
               <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
             </div>
             <div>
-              <label className="text-[11px] text-slate-400 block mb-1">Konec</label>
+              <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Konec</label>
               <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
             </div>
           </div>
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
-            className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
           {shift.recurringGroupId && (
-            <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
               <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
                 className="rounded border-slate-300 text-indigo-600" />
               Upravit celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
@@ -404,7 +404,7 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
             <button onClick={saveEdit} className="flex-1 flex items-center justify-center gap-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-xl py-2 hover:bg-indigo-700 transition-colors">
               <Check className="w-3.5 h-3.5" /> Uložit
             </button>
-            <button onClick={() => { setMode('view'); setEditSeriesConfirm(false) }} className="px-3 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs hover:bg-slate-50 transition-colors">
+            <button onClick={() => { setMode('view'); setEditSeriesConfirm(false) }} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -413,22 +413,22 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
         <>
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-800 mb-0.5">{shift.roleNeeded}</p>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2">
-                <Clock className="w-3 h-3 text-slate-400" />
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-0.5">{shift.roleNeeded}</p>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-2">
+                <Clock className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                 {shift.startTime} – {shift.endTime}
-                <span className="text-slate-300">·</span>
-                <span className="font-medium text-slate-600">{getDuration(shift.startTime, shift.endTime)}</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
+                <span className="font-medium text-slate-600 dark:text-slate-400">{getDuration(shift.startTime, shift.endTime)}</span>
               </div>
               {shift.assignedEmployee ? (
                 <div className="flex items-center gap-2">
                   <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
-                  <span className="text-xs font-semibold text-slate-700">{shift.assignedEmployee.name}</span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{shift.assignedEmployee.name}</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                    <UserIcon className="w-3 h-3 text-slate-400" />
+                  <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                    <UserIcon className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                   </div>
                   <span className="text-xs text-red-500 font-semibold">Volná pozice</span>
                 </div>
@@ -438,39 +438,39 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
               <ShiftStatusBadge status={shift.status} />
               <div className="flex gap-1 relative">
                 <button onClick={() => setMode(mode === 'assign' ? 'view' : 'assign')} title="Přiřadit zaměstnance"
-                  className={`p-1.5 rounded-lg transition-colors ${mode === 'assign' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-400 hover:bg-indigo-50 hover:text-indigo-600'}`}>
+                  className={`p-1.5 rounded-lg transition-colors ${mode === 'assign' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
                   <UserCheck className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => { setEditRole(shift.roleNeeded); setEditStart(shift.startTime); setEditEnd(shift.endTime); setEditNotes(shift.notes ?? ''); setMode('edit') }}
-                  title="Upravit směnu" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-colors">
+                  title="Upravit směnu" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => setDeleteConfirm(true)} title="Smazat směnu"
-                  className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                  className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-colors">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 {deleteConfirm && (
-                  <div className="absolute right-0 top-full z-30 mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-xl p-3">
-                    <p className="text-xs font-semibold text-slate-700 mb-2">Smazat směnu?</p>
+                  <div className="absolute right-0 top-full z-30 mt-1 w-52 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Smazat směnu?</p>
                     <div className="flex flex-col gap-1.5">
                       <button onClick={() => { onDelete(shift.id); setDeleteConfirm(false) }}
-                        className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
+                        className="text-xs px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 text-left transition-colors">
                         Jen tuto směnu
                       </button>
                       {shift.recurringGroupId && (
                         <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
-                          className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                          className="text-xs px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 text-left font-semibold transition-colors">
                           Celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
                         </button>
                       )}
                       {!shift.recurringGroupId && similarCount && similarCount > 1 && (
                         <button onClick={() => { onDeleteSimilar?.(); setDeleteConfirm(false) }}
-                          className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                          className="text-xs px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 text-left font-semibold transition-colors">
                           Všechny stejné ({similarCount}×)
                         </button>
                       )}
                       <button onClick={() => setDeleteConfirm(false)}
-                        className="text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-left transition-colors">
+                        className="text-xs px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-left transition-colors">
                         Zrušit
                       </button>
                     </div>
@@ -479,22 +479,22 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
               </div>
             </div>
           </div>
-          {shift.notes && <p className="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-50">{shift.notes}</p>}
+          {shift.notes && <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 pt-2 border-t border-slate-50 dark:border-slate-800">{shift.notes}</p>}
           {mode === 'assign' && (
-            <div className="mt-3 pt-3 border-t border-slate-100">
-              <p className="text-[11px] font-semibold text-slate-500 mb-2">Přiřadit zaměstnance:</p>
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-2">Přiřadit zaměstnance:</p>
               <div className="space-y-1">
                 {shift.assignedEmployee && (
                   <button onClick={() => { onAssign(shift.id, null); setMode('view') }}
-                    className="w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors">
+                    className="w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 dark:text-red-400 transition-colors">
                     Zrušit přiřazení
                   </button>
                 )}
                 {employees.map(emp => (
                   <button key={emp.id} onClick={() => { onAssign(shift.id, emp); setMode('view') }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-indigo-50 transition-colors">
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
                     <UserAvatar name={emp.name} color={emp.color} size="sm" />
-                    <span className="text-xs font-medium text-slate-700">{emp.name}</span>
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{emp.name}</span>
                   </button>
                 ))}
               </div>
@@ -532,24 +532,24 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
   }
 
   return (
-    <div className={`rounded-xl border border-slate-100 border-l-4 p-2.5 shadow-sm ${STATUS_COLORS[shift.status] ?? 'bg-slate-50'} relative group`}>
+    <div className={`rounded-xl border border-slate-100 dark:border-slate-800 border-l-4 p-2.5 shadow-sm ${STATUS_COLORS[shift.status] ?? 'bg-slate-50 dark:bg-slate-800'} relative group`}>
       <div className="flex items-center gap-1 mb-1">
-        <Clock className="w-2.5 h-2.5 text-slate-400 flex-shrink-0" />
-        <span className="text-[10px] font-semibold text-slate-600 truncate">
+        <Clock className="w-2.5 h-2.5 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 truncate">
           {shift.startTime}–{shift.endTime}
-          <span className="font-normal text-slate-400 ml-1">({getDuration(shift.startTime, shift.endTime)})</span>
+          <span className="font-normal text-slate-400 dark:text-slate-500 ml-1">({getDuration(shift.startTime, shift.endTime)})</span>
         </span>
       </div>
-      <p className="text-[10px] font-semibold text-slate-700 truncate mb-1.5">{shift.roleNeeded}</p>
+      <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 truncate mb-1.5">{shift.roleNeeded}</p>
       {shift.assignedEmployee ? (
         <div className="flex items-center gap-1">
           <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
-          <span className="text-[10px] text-slate-600 truncate">{shift.assignedEmployee.name.split(' ')[0]}</span>
+          <span className="text-[10px] text-slate-600 dark:text-slate-400 truncate">{shift.assignedEmployee.name.split(' ')[0]}</span>
         </div>
       ) : (
         <div className="flex items-center gap-1">
-          <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center">
-            <UserIcon className="w-2 h-2 text-slate-400" />
+          <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+            <UserIcon className="w-2 h-2 text-slate-400 dark:text-slate-500" />
           </div>
           <span className="text-[10px] text-red-500 font-medium">Volná</span>
         </div>
@@ -558,62 +558,62 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
         <ShiftStatusBadge status={shift.status} />
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditForm(false) }} title="Přiřadit"
-            className="p-1 rounded text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 transition-colors">
+            className="p-1 rounded text-slate-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
             <UserCheck className="w-3 h-3" />
           </button>
           <button onClick={openEdit} title="Upravit"
-            className="p-1 rounded text-slate-400 hover:bg-amber-100 hover:text-amber-600 transition-colors">
+            className="p-1 rounded text-slate-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
             <Pencil className="w-3 h-3" />
           </button>
           <button onClick={() => { setDeleteConfirm(v => !v); setShowAssign(false); setShowEditForm(false) }} title="Smazat"
-            className="p-1 rounded text-slate-400 hover:bg-red-100 hover:text-red-500 transition-colors">
+            className="p-1 rounded text-slate-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 dark:hover:text-red-400 transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
       {showAssign && (
-        <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-white rounded-xl border border-slate-200 shadow-lg overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-100">
-            <p className="text-[11px] font-semibold text-slate-500">Přiřadit zaměstnance</p>
+        <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Přiřadit zaměstnance</p>
           </div>
           <div className="max-h-48 overflow-y-auto">
             {shift.assignedEmployee && (
               <button onClick={() => { onAssign(shift.id, null); setShowAssign(false) }}
-                className="w-full text-left text-xs px-3 py-2 hover:bg-red-50 text-red-500 transition-colors">
+                className="w-full text-left text-xs px-3 py-2 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 dark:text-red-400 transition-colors">
                 Zrušit přiřazení
               </button>
             )}
             {employees.map(emp => (
               <button key={emp.id} onClick={() => { onAssign(shift.id, emp); setShowAssign(false) }}
-                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 transition-colors">
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
                 <UserAvatar name={emp.name} color={emp.color} size="sm" />
-                <span className="text-xs text-slate-700 truncate">{emp.name.split(' ')[0]}</span>
+                <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{emp.name.split(' ')[0]}</span>
               </button>
             ))}
           </div>
         </div>
       )}
       {showEditForm && (
-        <div className="absolute top-full left-0 z-20 mt-1 w-64 bg-white rounded-xl border border-slate-200 shadow-xl p-3 space-y-2">
-          <p className="text-[11px] font-semibold text-slate-600">Upravit směnu</p>
+        <div className="absolute top-full left-0 z-20 mt-1 w-64 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3 space-y-2">
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Upravit směnu</p>
           <input value={editRole} onChange={e => setEditRole(e.target.value)} placeholder="Pozice"
-            className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[10px] text-slate-400 block mb-0.5">Začátek</label>
+              <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-0.5">Začátek</label>
               <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
             </div>
             <div>
-              <label className="text-[10px] text-slate-400 block mb-0.5">Konec</label>
+              <label className="text-[10px] text-slate-400 dark:text-slate-500 block mb-0.5">Konec</label>
               <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
             </div>
           </div>
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
-            className="w-full text-xs rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
           {shift.recurringGroupId && seriesCount && (
-            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer">
+            <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
               <input type="checkbox" checked={editSeries} onChange={e => setEditSeries(e.target.checked)}
                 className="rounded border-slate-300 text-indigo-600" />
               Celou sérii{seriesCount > 1 ? ` (${seriesCount}×)` : ''}
@@ -625,34 +625,34 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
               <Check className="w-3 h-3" /> Uložit
             </button>
             <button onClick={() => setShowEditForm(false)}
-              className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 text-[11px] hover:bg-slate-50 transition-colors">
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
               <X className="w-3 h-3" />
             </button>
           </div>
         </div>
       )}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setDeleteConfirm(false)}>
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-3 w-52" onClick={e => e.stopPropagation()}>
-          <p className="text-[11px] font-semibold text-slate-700 mb-2 px-1">Smazat směnu?</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 dark:bg-black/40" onClick={() => setDeleteConfirm(false)}>
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3 w-52" onClick={e => e.stopPropagation()}>
+          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-2 px-1">Smazat směnu?</p>
           <button onClick={() => { onDelete(shift.id); setDeleteConfirm(false) }}
-            className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors mb-1">
+            className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors mb-1">
             Jen tuto směnu
           </button>
           {shift.recurringGroupId && (
             <button onClick={() => { onDeleteSeries?.(shift.recurringGroupId!); setDeleteConfirm(false) }}
-              className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold transition-colors mb-1">
+              className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 font-semibold transition-colors mb-1">
               Celou sérii{seriesCount && seriesCount > 1 ? ` (${seriesCount}×)` : ''}
             </button>
           )}
           {!shift.recurringGroupId && similarCount && similarCount > 1 && (
             <button onClick={() => { onDeleteSimilar?.(); setDeleteConfirm(false) }}
-              className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 font-semibold transition-colors mb-1">
+              className="w-full text-left text-xs px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 font-semibold transition-colors mb-1">
               Všechny stejné ({similarCount}×)
             </button>
           )}
           <button onClick={() => setDeleteConfirm(false)}
-            className="w-full text-left text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors">
+            className="w-full text-left text-xs px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors">
             Zrušit
           </button>
           </div>

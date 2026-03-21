@@ -245,10 +245,10 @@ export default function OpenShiftsPage() {
 
       <div className="flex-1 p-4 md:p-8">
         {openShifts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-100 p-16 text-center shadow-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-16 text-center shadow-sm">
             <div className="text-4xl mb-3">🎉</div>
-            <p className="text-slate-700 font-semibold">Všechny směny jsou obsazeny</p>
-            <p className="text-slate-400 text-sm mt-1">Žádné otevřené pozice momentálně nejsou.</p>
+            <p className="text-slate-700 dark:text-slate-300 font-semibold">Všechny směny jsou obsazeny</p>
+            <p className="text-slate-400 dark:text-slate-500 text-sm mt-1">Žádné otevřené pozice momentálně nejsou.</p>
           </div>
         ) : (
           <div className="space-y-4 max-w-2xl">
@@ -259,18 +259,18 @@ export default function OpenShiftsPage() {
               const isExpanded = expandedShift === shift.id
 
               return (
-                <div key={shift.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm">
+                <div key={shift.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                   {/* Header */}
                   <div className="p-5 flex gap-4 items-start">
-                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                      <Briefcase className="w-4.5 h-4.5 text-red-500" />
+                    <div className="flex-shrink-0 w-10 h-10 bg-red-50 dark:bg-red-900/30 rounded-xl flex items-center justify-center">
+                      <Briefcase className="w-4.5 h-4.5 text-red-500 dark:text-red-400" />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
                         <div>
-                          <p className="font-bold text-slate-900">{shift.roleNeeded}</p>
-                          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500">
+                          <p className="font-bold text-slate-900 dark:text-slate-100">{shift.roleNeeded}</p>
+                          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {format(parseISO(shift.date), 'EEEE d. M.', { locale: cs })}
@@ -278,11 +278,11 @@ export default function OpenShiftsPage() {
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               {shift.startTime}–{shift.endTime}
-                              <span className="text-slate-400">({getDuration(shift.startTime, shift.endTime)})</span>
+                              <span className="text-slate-400 dark:text-slate-500">({getDuration(shift.startTime, shift.endTime)})</span>
                             </span>
                           </div>
                           {shift.notes && (
-                            <p className="text-xs text-slate-400 mt-1.5 bg-slate-50 rounded-lg px-2 py-1">{shift.notes}</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1">{shift.notes}</p>
                           )}
                         </div>
 
@@ -290,7 +290,7 @@ export default function OpenShiftsPage() {
                           {isManager ? (
                             <>
                               {pendingApps.length > 0 && (
-                                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-xs">
+                                <Badge className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-xs">
                                   {pendingApps.length} čeká
                                 </Badge>
                               )}
@@ -298,7 +298,7 @@ export default function OpenShiftsPage() {
                                 <button
                                   onClick={() => startEdit(shift)}
                                   title="Upravit směnu"
-                                  className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                                  className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
@@ -306,33 +306,33 @@ export default function OpenShiftsPage() {
                                   <button
                                     onClick={() => setDeleteConfirm(deleteConfirm === shift.id ? null : shift.id)}
                                     title="Smazat směnu"
-                                    className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                    className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                   {deleteConfirm === shift.id && (
-                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20" onClick={() => setDeleteConfirm(null)}>
-                                      <div className="bg-white rounded-xl border border-slate-200 shadow-xl p-3 w-52" onClick={e => e.stopPropagation()}>
-                                        <p className="text-xs font-semibold text-slate-700 mb-2">Smazat směnu?</p>
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 dark:bg-black/40" onClick={() => setDeleteConfirm(null)}>
+                                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3 w-52" onClick={e => e.stopPropagation()}>
+                                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Smazat směnu?</p>
                                         <div className="flex flex-col gap-1.5">
                                           <button onClick={() => { handleDeleteShift(shift, false); setDeleteConfirm(null) }}
-                                            className="text-xs px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-left transition-colors">
+                                            className="text-xs px-3 py-2 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 text-left transition-colors">
                                             Jen tuto směnu
                                           </button>
                                           {shift.recurringGroupId && (
                                             <button onClick={() => handleDeleteShift(shift, true)}
-                                              className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                                              className="text-xs px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 text-left font-semibold transition-colors">
                                               Celou sérii{groupCounts[shift.recurringGroupId] > 1 ? ` (${groupCounts[shift.recurringGroupId]}×)` : ''}
                                             </button>
                                           )}
                                           {!shift.recurringGroupId && similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`] > 1 && (
                                             <button onClick={() => handleDeleteSimilar(shift)}
-                                              className="text-xs px-3 py-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 text-left font-semibold transition-colors">
+                                              className="text-xs px-3 py-2 rounded-lg bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-900/60 text-left font-semibold transition-colors">
                                               Všechny stejné ({similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}×)
                                             </button>
                                           )}
                                           <button onClick={() => setDeleteConfirm(null)}
-                                            className="text-xs px-3 py-2 text-slate-500 hover:bg-slate-50 rounded-lg text-left transition-colors">
+                                            className="text-xs px-3 py-2 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-left transition-colors">
                                             Zrušit
                                           </button>
                                         </div>
@@ -344,7 +344,7 @@ export default function OpenShiftsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 text-xs text-slate-500"
+                                className="h-8 text-xs text-slate-500 dark:text-slate-400"
                                 onClick={() => setExpandedShift(isExpanded ? null : shift.id)}
                               >
                                 Přihlášky
@@ -358,7 +358,7 @@ export default function OpenShiftsPage() {
                                 disabled={hasApplied}
                                 onClick={() => handleApply(shift)}
                                 className={hasApplied
-                                  ? 'bg-green-50 text-green-700 border border-green-200 hover:bg-green-50 cursor-default'
+                                  ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 hover:bg-green-50 cursor-default'
                                   : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                                 }
                               >
@@ -376,8 +376,8 @@ export default function OpenShiftsPage() {
                                   onClick={() => handleApplySeries(shift)}
                                   className={
                                     appliedGroups.has(shift.recurringGroupId)
-                                      ? 'border-green-200 text-green-700 bg-green-50 cursor-default text-xs h-7'
-                                      : 'border-indigo-200 text-indigo-600 hover:bg-indigo-50 text-xs h-7'
+                                      ? 'border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 cursor-default text-xs h-7'
+                                      : 'border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-xs h-7'
                                   }
                                 >
                                   <Repeat className="w-3 h-3 mr-1" />
@@ -398,34 +398,34 @@ export default function OpenShiftsPage() {
 
                   {/* Edit panel (manager only) */}
                   {isManager && editingShift === shift.id && (
-                    <div className="border-t border-slate-50 bg-amber-50/40 px-5 py-4 space-y-3">
-                      <p className="text-xs font-semibold text-slate-600">Upravit směnu</p>
+                    <div className="border-t border-slate-50 dark:border-slate-800 bg-amber-50/40 dark:bg-amber-900/10 px-5 py-4 space-y-3">
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">Upravit směnu</p>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[11px] text-slate-400 block mb-1">Pozice</label>
+                          <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Pozice</label>
                           <input value={editRole} onChange={e => setEditRole(e.target.value)}
-                            className="w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400 block mb-1">Poznámka</label>
+                          <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Poznámka</label>
                           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="nepovinné"
-                            className="w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-[11px] text-slate-400 block mb-1">Začátek</label>
+                          <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Začátek</label>
                           <input type="time" value={editStart} onChange={e => setEditStart(e.target.value)}
-                            className="w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                         </div>
                         <div>
-                          <label className="text-[11px] text-slate-400 block mb-1">Konec</label>
+                          <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Konec</label>
                           <input type="time" value={editEnd} onChange={e => setEditEnd(e.target.value)}
-                            className="w-full text-sm rounded-xl border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+                            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                         </div>
                       </div>
                       {shift.recurringGroupId && (
-                        <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                        <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
                           <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
                             className="rounded border-slate-300 text-indigo-600" />
                           Upravit celou sérii{groupCounts[shift.recurringGroupId] > 1 ? ` (${groupCounts[shift.recurringGroupId]}×)` : ''}
@@ -437,7 +437,7 @@ export default function OpenShiftsPage() {
                           <Check className="w-3.5 h-3.5" /> Uložit
                         </button>
                         <button onClick={() => { setEditingShift(null); setEditSeriesConfirm(false) }}
-                          className="px-4 py-2 border border-slate-200 text-slate-500 text-xs rounded-xl hover:bg-slate-50 transition-colors">
+                          className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                           Zrušit
                         </button>
                       </div>
@@ -446,30 +446,30 @@ export default function OpenShiftsPage() {
 
                   {/* Applications panel (manager only) */}
                   {isManager && isExpanded && (
-                    <div className="border-t border-slate-50 bg-slate-50/50 px-5 py-4">
+                    <div className="border-t border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 px-5 py-4">
                       {shiftApps.length === 0 ? (
-                        <p className="text-sm text-slate-400 text-center py-2">Žádné přihlášky pro tuto směnu.</p>
+                        <p className="text-sm text-slate-400 dark:text-slate-500 text-center py-2">Žádné přihlášky pro tuto směnu.</p>
                       ) : (
                         <div className="space-y-2">
                           {shiftApps.map(app => (
-                            <div key={app.id} className="flex items-center gap-3 bg-white rounded-xl px-4 py-3 border border-slate-100">
+                            <div key={app.id} className="flex items-center gap-3 bg-white dark:bg-slate-900 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-800">
                               <UserAvatar name={app.employee.name} color={app.employee.color} size="md" />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-slate-800">{app.employee.name}</p>
-                                <p className="text-xs text-slate-400">Přihlásil/a se {app.createdAt}</p>
+                                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{app.employee.name}</p>
+                                <p className="text-xs text-slate-400 dark:text-slate-500">Přihlásil/a se {app.createdAt}</p>
                               </div>
                               {app.status === 'pending' ? (
                                 <div className="flex gap-1.5">
                                   <button
                                     onClick={() => handleApprove(app.id)}
-                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 text-green-700 text-xs font-medium hover:bg-green-100 transition-colors"
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                     Schválit
                                   </button>
                                   <button
                                     onClick={() => handleReject(app.id)}
-                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 text-red-600 text-xs font-medium hover:bg-red-100 transition-colors"
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
                                   >
                                     <XCircle className="w-3.5 h-3.5" />
                                     Zamítnout
@@ -477,8 +477,8 @@ export default function OpenShiftsPage() {
                                 </div>
                               ) : (
                                 <Badge className={app.status === 'approved'
-                                  ? 'bg-green-50 text-green-700 border-green-200 text-xs'
-                                  : 'bg-slate-100 text-slate-500 border-slate-200 text-xs'
+                                  ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 text-xs'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 text-xs'
                                 }>
                                   {app.status === 'approved' ? 'Schváleno' : 'Zamítnuto'}
                                 </Badge>

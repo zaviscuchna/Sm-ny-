@@ -77,17 +77,17 @@ export default function SettingsPage() {
       <div className="flex-1 p-4 md:p-8 max-w-2xl space-y-6">
 
         {/* Profile */}
-        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 bg-slate-50/60">
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
             <User className="w-4 h-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-700">Profil</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Profil</h2>
           </div>
           <div className="p-5 space-y-4">
             <div className="flex items-center gap-4">
               <UserAvatar name={user?.name ?? ''} color={user?.color} size="lg" />
               <div>
-                <p className="font-bold text-slate-900">{user?.name}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{user?.email}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100">{user?.name}</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{user?.email}</p>
                 <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
                   {user?.role === 'manager' ? 'Manažer' : user?.role === 'superadmin' ? 'Super Admin' : 'Zaměstnanec'}
                 </span>
@@ -96,11 +96,11 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               <div className="space-y-1.5">
                 <Label className="text-xs text-slate-500">Jméno</Label>
-                <Input value={user?.name ?? ''} readOnly className="bg-slate-50 border-slate-200 text-slate-700" />
+                <Input value={user?.name ?? ''} readOnly className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-slate-500">E-mail</Label>
-                <Input value={user?.email ?? ''} readOnly className="bg-slate-50 border-slate-200 text-slate-700" />
+                <Input value={user?.email ?? ''} readOnly className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" />
               </div>
             </div>
             <p className="text-xs text-slate-400">Úprava profilu bude dostupná v placené verzi.</p>
@@ -109,20 +109,20 @@ export default function SettingsPage() {
 
         {/* Business */}
         {activeBusiness && user?.role !== 'superadmin' && (
-          <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 bg-slate-50/60">
+          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
               <Building2 className="w-4 h-4 text-slate-400" />
-              <h2 className="text-sm font-semibold text-slate-700">Podnik</h2>
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Podnik</h2>
             </div>
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs text-slate-500">Název podniku</Label>
-                  <Input value={activeBusiness.name} readOnly className="bg-slate-50 border-slate-200 text-slate-700" />
+                  <Input value={activeBusiness.name} readOnly className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs text-slate-500">Lokalita</Label>
-                  <Input value={activeBusiness.location || '—'} readOnly className="bg-slate-50 border-slate-200 text-slate-700" />
+                  <Input value={activeBusiness.location || '—'} readOnly className="bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300" />
                 </div>
               </div>
 
@@ -130,12 +130,12 @@ export default function SettingsPage() {
                 <div className="space-y-1.5">
                   <Label className="text-xs text-slate-500">Kód pro pozvání zaměstnanců</Label>
                   <div className="flex items-center gap-2">
-                    <div className="flex-1 flex items-center bg-slate-50 border border-slate-200 rounded-lg px-4 py-2.5">
-                      <span className="font-mono text-xl font-bold text-indigo-700 tracking-widest">{joinCode}</span>
+                    <div className="flex-1 flex items-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2.5">
+                      <span className="font-mono text-xl font-bold text-indigo-700 dark:text-indigo-400 tracking-widest">{joinCode}</span>
                     </div>
                     <button
                       onClick={copyCode}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold rounded-lg transition-colors border border-indigo-100"
+                      className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 text-sm font-semibold rounded-lg transition-colors border border-indigo-100 dark:border-indigo-800"
                     >
                       {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                       {copied ? 'Zkopírováno' : 'Kopírovat'}
@@ -154,10 +154,10 @@ export default function SettingsPage() {
 
         {/* Positions */}
         {user?.role === 'manager' && isNewBusiness && (
-          <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 bg-slate-50/60">
+          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
               <Briefcase className="w-4 h-4 text-slate-400" />
-              <h2 className="text-sm font-semibold text-slate-700">Pracovní pozice</h2>
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pracovní pozice</h2>
             </div>
             <div className="p-5 space-y-4">
               <p className="text-xs text-slate-500">Přidej pozice které budou dostupné při vytváření směn.</p>
@@ -198,10 +198,10 @@ export default function SettingsPage() {
         )}
 
         {/* Security */}
-        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 bg-slate-50/60">
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
             <ShieldCheck className="w-4 h-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-700">Zabezpečení</h2>
+            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Zabezpečení</h2>
           </div>
           <div className="p-5 space-y-3">
             <p className="text-xs text-slate-400 leading-relaxed">
@@ -219,7 +219,7 @@ export default function SettingsPage() {
         </section>
 
         {/* App version */}
-        <p className="text-xs text-slate-300 text-center pb-2">Směny · Demo verze 0.1 · KSH Web Studio</p>
+        <p className="text-xs text-slate-300 dark:text-slate-600 text-center pb-2">Směny · Demo verze 0.1 · KSH Web Studio</p>
 
       </div>
     </div>

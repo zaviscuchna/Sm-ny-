@@ -46,10 +46,10 @@ function addMinutes(time: string, mins: number): string {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  confirmed: { bg: 'bg-green-50', border: 'border-green-400', text: 'text-green-800' },
-  assigned:  { bg: 'bg-blue-50',  border: 'border-blue-400',  text: 'text-blue-800' },
-  pending:   { bg: 'bg-amber-50', border: 'border-amber-400', text: 'text-amber-800' },
-  open:      { bg: 'bg-red-50',   border: 'border-red-300',   text: 'text-red-700'  },
+  confirmed: { bg: 'bg-green-50 dark:bg-green-900/30', border: 'border-green-400', text: 'text-green-800 dark:text-green-300' },
+  assigned:  { bg: 'bg-blue-50 dark:bg-blue-900/30',  border: 'border-blue-400',  text: 'text-blue-800 dark:text-blue-300' },
+  pending:   { bg: 'bg-amber-50 dark:bg-amber-900/30', border: 'border-amber-400', text: 'text-amber-800 dark:text-amber-300' },
+  open:      { bg: 'bg-red-50 dark:bg-red-900/30',   border: 'border-red-300',   text: 'text-red-700 dark:text-red-400'  },
 }
 
 interface DragState {
@@ -193,19 +193,19 @@ export default function CalendarPage() {
 
       <div className="px-4 md:px-8 pt-5 pb-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200"
+          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200 dark:border-slate-700"
             onClick={() => setWeekOffset(o => o - 1)}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="text-sm font-semibold text-slate-700 px-1">
+          <div className="text-sm font-semibold text-slate-700 dark:text-slate-300 px-1">
             {format(weekStart, 'd. M.', { locale: cs })} — {format(addDays(weekStart, 6), 'd. M. yyyy', { locale: cs })}
           </div>
-          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200"
+          <Button variant="outline" size="icon" className="h-8 w-8 border-slate-200 dark:border-slate-700"
             onClick={() => setWeekOffset(o => o + 1)}>
             <ChevronRight className="w-4 h-4" />
           </Button>
           {weekOffset !== 0 && (
-            <Button variant="ghost" size="sm" className="text-xs text-indigo-600 hidden sm:inline-flex"
+            <Button variant="ghost" size="sm" className="text-xs text-indigo-600 dark:text-indigo-400 hidden sm:inline-flex"
               onClick={() => setWeekOffset(0)}>
               Tento týden
             </Button>
@@ -220,21 +220,21 @@ export default function CalendarPage() {
       </div>
 
       <div className="flex-1 px-4 md:px-8 pb-8 overflow-auto">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden"
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden"
           style={{ userSelect: 'none' }}>
 
-          <div className="flex border-b border-slate-100">
-            <div className="w-12 shrink-0 border-r border-slate-100" />
+          <div className="flex border-b border-slate-100 dark:border-slate-800">
+            <div className="w-12 shrink-0 border-r border-slate-100 dark:border-slate-800" />
             {weekDays.map(({ dateStr, date }, i) => {
               const isToday = dateStr === todayStr
               return (
                 <div key={dateStr}
-                  className={`flex-1 py-3 text-center border-r last:border-r-0 border-slate-100 ${isToday ? 'bg-indigo-50' : ''}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${isToday ? 'text-indigo-500' : 'text-slate-400'}`}>
+                  className={`flex-1 py-3 text-center border-r last:border-r-0 border-slate-100 dark:border-slate-800 ${isToday ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''}`}>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${isToday ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500'}`}>
                     {DAY_LABELS[i]}
                   </p>
                   <div className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold mt-0.5 ${
-                    isToday ? 'bg-indigo-600 text-white' : 'text-slate-700'
+                    isToday ? 'bg-indigo-600 text-white' : 'text-slate-700 dark:text-slate-300'
                   }`}>
                     {date.getDate()}
                   </div>
@@ -244,11 +244,11 @@ export default function CalendarPage() {
           </div>
 
           <div className="flex" style={{ height: TOTAL_HOURS * HOUR_HEIGHT }}>
-            <div className="w-12 shrink-0 relative border-r border-slate-100 bg-white z-10">
+            <div className="w-12 shrink-0 relative border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 z-10">
               {hours.map(h => (
                 <div key={h} className="absolute w-full flex items-start justify-end pr-2"
                   style={{ top: (h - START_HOUR) * HOUR_HEIGHT - 8 }}>
-                  <span className="text-[10px] text-slate-400 leading-none">{h}:00</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-none">{h}:00</span>
                 </div>
               ))}
             </div>
@@ -260,14 +260,14 @@ export default function CalendarPage() {
                 const dayShifts = weekShifts.filter(s => s.date === dateStr)
                 return (
                   <div key={dateStr}
-                    className={`flex-1 relative border-r last:border-r-0 border-slate-100 group ${isToday ? 'bg-indigo-50/20' : ''}`}>
+                    className={`flex-1 relative border-r last:border-r-0 border-slate-100 dark:border-slate-800 group ${isToday ? 'bg-indigo-50/20 dark:bg-indigo-900/10' : ''}`}>
 
                     {hours.map(h => (
-                      <div key={h} className="absolute w-full border-t border-slate-100 pointer-events-none"
+                      <div key={h} className="absolute w-full border-t border-slate-100 dark:border-slate-800 pointer-events-none"
                         style={{ top: (h - START_HOUR) * HOUR_HEIGHT }} />
                     ))}
                     {hours.slice(0, -1).map(h => (
-                      <div key={`${h}.5`} className="absolute w-full border-t border-slate-50 pointer-events-none"
+                      <div key={`${h}.5`} className="absolute w-full border-t border-slate-50 dark:border-slate-800/50 pointer-events-none"
                         style={{ top: (h - START_HOUR) * HOUR_HEIGHT + HOUR_HEIGHT / 2 }} />
                     ))}
 
@@ -326,8 +326,8 @@ export default function CalendarPage() {
                         employees={employees}
                         onShiftsCreated={ns => setShifts(prev => [...prev, ...ns])}
                         trigger={
-                          <button className="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-indigo-100 text-indigo-600
-                            flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-indigo-200
+                          <button className="absolute bottom-1 right-1 w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400
+                            flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-indigo-200 dark:hover:bg-indigo-900/80
                             transition-opacity z-20">
                             <Plus className="w-3.5 h-3.5" />
                           </button>
@@ -365,7 +365,7 @@ export default function CalendarPage() {
         </div>
 
         {isManager && (
-          <p className="text-xs text-slate-400 mt-3 text-center">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
             Směny lze přetáhnout na jiný den nebo čas — změny se ukládají automaticky
           </p>
         )}

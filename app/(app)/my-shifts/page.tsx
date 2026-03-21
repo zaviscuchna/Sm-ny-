@@ -183,24 +183,24 @@ export default function MyShiftsPage() {
             { label: 'Hodin celkem',  value: totalHours,            unit: 'h tento týden' },
             { label: 'Odpracováno',   value: pastShifts.length,     unit: 'směn' },
           ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
-              <p className="text-xs text-slate-400">{s.label}</p>
-              <p className="text-3xl font-bold text-slate-900 mt-1">{s.value}</p>
-              <p className="text-xs text-slate-400">{s.unit}</p>
+            <div key={s.label} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm px-5 py-4">
+              <p className="text-xs text-slate-400 dark:text-slate-500">{s.label}</p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">{s.value}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{s.unit}</p>
             </div>
           ))}
         </div>
 
         {/* Upcoming shifts */}
         <section>
-          <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-indigo-500" />
             Nadcházející směny
           </h2>
 
           {upcomingShifts.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center">
-              <p className="text-slate-400 text-sm">Žádné naplánované směny.</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-10 text-center">
+              <p className="text-slate-400 dark:text-slate-500 text-sm">Žádné naplánované směny.</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -211,8 +211,8 @@ export default function MyShiftsPage() {
                 return (
                   <div
                     key={shift.id}
-                    className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${
-                      isToday ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-slate-100'
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border shadow-sm overflow-hidden ${
+                      isToday ? 'border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-100 dark:ring-indigo-900/50' : 'border-slate-100 dark:border-slate-800'
                     }`}
                   >
                     {isToday && (
@@ -224,31 +224,31 @@ export default function MyShiftsPage() {
                     )}
                     <div className="p-5 flex items-center gap-4">
                       <div className="flex-shrink-0 text-center w-12">
-                        <p className="text-2xl font-black text-slate-900 leading-none">
+                        <p className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
                           {format(parseISO(shift.date), 'd')}
                         </p>
-                        <p className="text-xs font-semibold text-slate-400 uppercase">
+                        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase">
                           {format(parseISO(shift.date), 'MMM', { locale: cs })}
                         </p>
-                        <p className="text-[10px] text-slate-300">
+                        <p className="text-[10px] text-slate-300 dark:text-slate-600">
                           {format(parseISO(shift.date), 'EEE', { locale: cs })}
                         </p>
                       </div>
 
-                      <div className="w-px h-12 bg-slate-100" />
+                      <div className="w-px h-12 bg-slate-100 dark:bg-slate-800" />
 
                       <div className="flex-1 min-w-0">
-                        <p className="font-bold text-slate-900">{shift.roleNeeded}</p>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                        <p className="font-bold text-slate-900 dark:text-slate-100">{shift.roleNeeded}</p>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 dark:text-slate-400">
                           <span className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             {shift.startTime}–{shift.endTime}
                           </span>
-                          <span className="text-slate-300">·</span>
+                          <span className="text-slate-300 dark:text-slate-600">·</span>
                           <span>{getDuration(shift.startTime, shift.endTime)}</span>
                         </div>
                         {shift.notes && (
-                          <p className="text-xs text-slate-400 mt-1.5 bg-slate-50 rounded-lg px-2 py-1">{shift.notes}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg px-2 py-1">{shift.notes}</p>
                         )}
                       </div>
 
@@ -274,14 +274,14 @@ export default function MyShiftsPage() {
 
         {/* Work logging */}
         <section>
-          <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-indigo-500" />
             Záznamy práce
           </h2>
 
           {/* Add new log form */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-4">
-            <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-1.5">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 mb-4">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-3 flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5" /> Přidat záznam
             </p>
             <form onSubmit={handleLogSubmit} className="space-y-3">
@@ -293,7 +293,7 @@ export default function MyShiftsPage() {
                     value={logDate}
                     max={todayStr}
                     onChange={e => setLogDate(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -303,7 +303,7 @@ export default function MyShiftsPage() {
                       type="time"
                       value={clockIn}
                       onChange={e => setClockIn(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     />
                   </div>
                   <div>
@@ -312,7 +312,7 @@ export default function MyShiftsPage() {
                       type="time"
                       value={clockOut}
                       onChange={e => setClockOut(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                     />
                   </div>
                 </div>
@@ -324,7 +324,7 @@ export default function MyShiftsPage() {
                   placeholder="např. přesčas, zastupování..."
                   value={logNotes}
                   onChange={e => setLogNotes(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 />
               </div>
               <Button type="submit" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white w-full rounded-xl">
@@ -334,55 +334,55 @@ export default function MyShiftsPage() {
           </div>
 
           {/* Month selector + history */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-50 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <p className="text-xs font-semibold text-slate-700 capitalize min-w-[90px] text-center">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 capitalize min-w-[90px] text-center">
                   {format(new Date(logMonth + '-01'), 'LLLL yyyy', { locale: cs })}
                 </p>
                 <button
                   onClick={nextMonth}
                   disabled={logMonth >= format(new Date(), 'yyyy-MM')}
-                  className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
               <div className="text-right">
-                <p className="text-xs text-slate-400">Celkem</p>
-                <p className="text-sm font-bold text-indigo-600">{monthTotal}h</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">Celkem</p>
+                <p className="text-sm font-bold text-indigo-600 dark:text-indigo-400">{monthTotal}h</p>
               </div>
             </div>
 
             {monthLogs.length === 0 ? (
-              <div className="px-5 py-10 text-center text-sm text-slate-400">
+              <div className="px-5 py-10 text-center text-sm text-slate-400 dark:text-slate-500">
                 Žádné záznamy za tento měsíc.
               </div>
             ) : (
-              <div className="divide-y divide-slate-50">
+              <div className="divide-y divide-slate-50 dark:divide-slate-800">
                 {monthLogs.map(log => (
                   <div key={log.id} className="flex items-center gap-3 px-5 py-3">
                     <div className="flex-shrink-0 text-center w-10">
-                      <p className="text-lg font-black text-slate-800 leading-none">
+                      <p className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">
                         {format(parseISO(log.date), 'd')}
                       </p>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase">
+                      <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase">
                         {format(parseISO(log.date), 'EEE', { locale: cs })}
                       </p>
                     </div>
-                    <div className="w-px h-8 bg-slate-100 flex-shrink-0" />
+                    <div className="w-px h-8 bg-slate-100 dark:bg-slate-800 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-slate-800">{log.clockIn} – {log.clockOut}</p>
-                      {log.notes && <p className="text-[11px] text-slate-400 truncate">{log.notes}</p>}
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{log.clockIn} – {log.clockOut}</p>
+                      {log.notes && <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{log.notes}</p>}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-slate-700">{log.hours}h</span>
+                      <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{log.hours}h</span>
                       <button
                         onClick={() => handleDeleteLog(log.id)}
-                        className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+                        className="p-1 rounded-lg text-slate-300 dark:text-slate-600 hover:text-red-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
                         title="Smazat"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -397,14 +397,14 @@ export default function MyShiftsPage() {
 
         {/* Open shifts to apply */}
         <section>
-          <h2 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+          <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-amber-500" />
             Volné směny — přihlas se
           </h2>
 
           {openShifts.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-10 text-center">
-              <p className="text-slate-400 text-sm">Žádné volné směny k dispozici.</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-10 text-center">
+              <p className="text-slate-400 dark:text-slate-500 text-sm">Žádné volné směny k dispozici.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -413,20 +413,20 @@ export default function MyShiftsPage() {
                 return (
                   <div
                     key={shift.id}
-                    className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex items-center gap-4"
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-4 flex items-center gap-4"
                   >
                     <div className="flex-shrink-0 text-center w-10">
-                      <p className="text-xl font-black text-slate-700 leading-none">
+                      <p className="text-xl font-black text-slate-700 dark:text-slate-300 leading-none">
                         {format(parseISO(shift.date), 'd')}
                       </p>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase">
+                      <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase">
                         {format(parseISO(shift.date), 'EEE', { locale: cs })}
                       </p>
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800">{shift.roleNeeded}</p>
-                      <p className="text-xs text-slate-400">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{shift.roleNeeded}</p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
                         {shift.startTime}–{shift.endTime} · {getDuration(shift.startTime, shift.endTime)}
                       </p>
                     </div>

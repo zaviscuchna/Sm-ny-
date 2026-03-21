@@ -79,13 +79,13 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-slate-100 shrink-0">
+      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-slate-100 dark:border-slate-800 shrink-0">
         <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
           <Coffee className="w-4 h-4 text-white" />
         </div>
         <div>
-          <div className="text-sm font-bold text-slate-900 leading-tight">Směny</div>
-          <div className="text-[10px] text-slate-400 leading-tight">organizátor</div>
+          <div className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">Směny</div>
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">organizátor</div>
         </div>
       </div>
 
@@ -94,15 +94,15 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           <div className="mb-3">
             <button
               onClick={handleBackToOverview}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-indigo-600 transition-colors w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50"
+              className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors w-full px-2 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
               Zpět na přehled
             </button>
-            <div className="mt-2 mb-3 mx-1 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-100">
-              <div className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider mb-0.5">Prohlížíš jako</div>
-              <div className="text-xs font-semibold text-indigo-700 leading-tight">{activeBusiness.name}</div>
-              <div className="text-[10px] text-indigo-400">{activeBusiness.location}</div>
+            <div className="mt-2 mb-3 mx-1 px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800">
+              <div className="text-[10px] font-semibold text-indigo-400 dark:text-indigo-500 uppercase tracking-wider mb-0.5">Prohlížíš jako</div>
+              <div className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 leading-tight">{activeBusiness.name}</div>
+              <div className="text-[10px] text-indigo-400 dark:text-indigo-500">{activeBusiness.location}</div>
             </div>
           </div>
         )}
@@ -114,11 +114,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             className={cn(
               'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
               pathname.startsWith('/admin')
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
             )}
           >
-            <Building2 className={cn('w-4 h-4', pathname.startsWith('/admin') ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600')} />
+            <Building2 className={cn('w-4 h-4', pathname.startsWith('/admin') ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300')} />
             Přehled provozoven
             {pathname.startsWith('/admin') && <ChevronRight className="w-3 h-3 ml-auto text-indigo-400" />}
           </Link>
@@ -134,25 +134,25 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group',
                 active
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
               )}
             >
-              <item.icon className={cn('w-4 h-4', active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600')} />
+              <item.icon className={cn('w-4 h-4', active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300')} />
               {item.label}
-              {active && <ChevronRight className="w-3 h-3 ml-auto text-indigo-400" />}
+              {active && <ChevronRight className="w-3 h-3 ml-auto text-indigo-400 dark:text-indigo-500" />}
             </Link>
           )
         })}
       </nav>
 
       {user && (
-        <div className="p-3 border-t border-slate-100 shrink-0">
+        <div className="p-3 border-t border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5 p-2 rounded-lg mb-1">
             <UserAvatar name={user.name} color={user.color} />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-slate-800 truncate">{user.name}</div>
-              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+              <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">{user.name}</div>
+              <div className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
                 {isSuperAdmin && <ShieldCheck className="w-2.5 h-2.5 text-indigo-400" />}
                 <span className="capitalize">{ROLE_LABELS[user.role]}</span>
               </div>
@@ -160,7 +160,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors"
           >
             <LogOut className="w-3.5 h-3.5" />
             Odhlásit se
@@ -177,13 +177,13 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-60 shrink-0 bg-white border-r border-slate-100 flex-col h-screen sticky top-0">
+      <aside className="hidden md:flex w-60 shrink-0 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex-col h-screen sticky top-0">
         <SidebarContent />
       </aside>
 
       {/* Mobile Sheet */}
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="left" className="p-0 w-60 border-r border-slate-100">
+        <SheetContent side="left" className="p-0 w-60 border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
           <SidebarContent onClose={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
