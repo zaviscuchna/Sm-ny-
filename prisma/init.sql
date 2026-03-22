@@ -27,6 +27,26 @@ CREATE TABLE IF NOT EXISTS "Shift" (
   "notes"                TEXT
 );
 
+CREATE TABLE IF NOT EXISTS "QrToken" (
+  "id"          TEXT NOT NULL PRIMARY KEY,
+  "business_id" TEXT NOT NULL,
+  "token"       TEXT NOT NULL,
+  "expires_at"  TIMESTAMPTZ NOT NULL,
+  "created_at"  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "ClockSession" (
+  "id"            TEXT NOT NULL PRIMARY KEY,
+  "business_id"   TEXT NOT NULL,
+  "employee_id"   TEXT NOT NULL,
+  "employee_name" TEXT NOT NULL,
+  "date"          TEXT NOT NULL,
+  "clock_in"      TEXT NOT NULL,
+  "clock_out"     TEXT,
+  "hours"         DOUBLE PRECISION,
+  "created_at"    TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS "WorkLog" (
   "id"            TEXT NOT NULL PRIMARY KEY,
   "employee_id"   TEXT NOT NULL REFERENCES "User"("id"),

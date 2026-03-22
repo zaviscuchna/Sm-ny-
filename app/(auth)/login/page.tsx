@@ -53,6 +53,9 @@ function LoginForm() {
 
     toast.success('Přihlášení proběhlo úspěšně')
 
+    const redirect = searchParams.get('redirect')
+    if (redirect) { router.push(redirect); return }
+
     if (result.role === 'superadmin') router.push('/admin')
     else if (result.role === 'manager') router.push('/dashboard')
     else router.push('/my-shifts')
