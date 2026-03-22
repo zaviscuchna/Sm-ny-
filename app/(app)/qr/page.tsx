@@ -28,17 +28,30 @@ export default function QrPage() {
   const [now,        setNow]        = useState(new Date())
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [loading,    setLoading]    = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const bizIsRegistered = isRegistered(activeBusiness?.id ?? '')
 
   const fetchToken = useCallback(async () => {
     if (!activeBusiness || !bizIsRegistered) return
     setLoading(true)
+    setFetchError(null)
     try {
       const res  = await fetch(`/api/qr-token?bizId=${activeBusiness.id}`)
-      const data = await res.json()
+      const text = await res.text()
+      let data: any
+      try { data = JSON.parse(text) } catch {
+        setFetchError(`API vrátilo nečitelnou odpověď (${res.status}): ${text.slice(0, 200)}`)
+        return
+      }
+      if (!res.ok || data.error) {
+        setFetchError(`API chyba (${res.status}): ${data.error ?? data.message ?? text.slice(0, 200)}`)
+        return
+      }
       setToken(data.token)
       setExpiresAt(new Date(data.expiresAt))
+    } catch (e: any) {
+      setFetchError(`Síťová chyba: ${e.message}`)
     } finally {
       setLoading(false)
     }
@@ -122,6 +135,12 @@ export default function QrPage() {
             {loading ? (
               <div className="w-[280px] h-[280px] bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center">
                 <RefreshCw className="w-8 h-8 text-slate-300 dark:text-slate-600 animate-spin" />
+              </div>
+            ) : fetchError ? (
+              <div className="w-full p-4 bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800">
+                <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Chyba načítání QR kódu</p>
+                <p className="text-xs text-red-500 dark:text-red-400 break-all">{fetchError}</p>
+                <p className="text-[10px] text-slate-400 mt-1">bizId: {activeBusiness?.id}</p>
               </div>
             ) : scanUrl ? (
               <div className="p-4 bg-white rounded-2xl shadow-inner border border-slate-100">
