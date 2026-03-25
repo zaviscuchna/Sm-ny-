@@ -26,22 +26,33 @@ export async function POST(req: NextRequest) {
 
   const client = await pool.connect()
   try {
-    const existing = await client.query(
-      'SELECT id FROM "ShiftApplication" WHERE shift_id = $1 AND employee_id = $2 AND status = \'pending\'',
-      [shiftId, employeeId]
+    // Check if shift is still open
+    const shiftCheck = await client.query(
+      'SELECT status FROM "Shift" WHERE id = $1',
+      [shiftId]
     )
-    if (existing.rows.length > 0) {
-      return NextResponse.json({ error: 'Přihláška již čeká na schválení' }, { status: 400 })
+    if (shiftCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Směna neexistuje' }, { status: 404 })
+    }
+    if (shiftCheck.rows[0].status !== 'open') {
+      return NextResponse.json({ error: 'Směna už je obsazená' }, { status: 400 })
     }
 
+    // Auto-assign: directly assign the shift to the employee
+    await client.query(
+      'UPDATE "Shift" SET assigned_employee_id = $1, status = $2 WHERE id = $3',
+      [employeeId, 'assigned', shiftId]
+    )
+
+    // Log the application as approved
     const id = `app-${Date.now()}`
     const createdAt = new Date().toISOString().split('T')[0]
     await client.query(
       `INSERT INTO "ShiftApplication" (id, shift_id, employee_id, employee_name, business_id, status, created_at)
-       VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+       VALUES ($1,$2,$3,$4,$5,'approved',$6)`,
       [id, shiftId, employeeId, employeeName, bizId, createdAt]
     )
-    return NextResponse.json({ id, shiftId, employeeId, employeeName, bizId, status: 'pending', createdAt })
+    return NextResponse.json({ id, shiftId, employeeId, employeeName, bizId, status: 'approved', createdAt })
   } finally {
     client.release()
   }

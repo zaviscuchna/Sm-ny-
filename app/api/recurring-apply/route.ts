@@ -31,10 +31,16 @@ export async function POST(req: NextRequest) {
       )
       if (existing.length > 0) continue
 
+      // Auto-assign the shift
+      await client.query(
+        'UPDATE "Shift" SET assigned_employee_id = $1, status = $2 WHERE id = $3',
+        [employeeId, 'assigned', shift.id]
+      )
+
       const appId = `app-${Date.now()}-${Math.random().toString(36).slice(2)}`
       await client.query(
         `INSERT INTO "ShiftApplication" (id, shift_id, employee_id, employee_name, business_id, status, created_at)
-         VALUES ($1,$2,$3,$4,$5,'pending',$6)`,
+         VALUES ($1,$2,$3,$4,$5,'approved',$6)`,
         [appId, shift.id, employeeId, employeeName, bizId, now]
       )
       created.push(shift.id)

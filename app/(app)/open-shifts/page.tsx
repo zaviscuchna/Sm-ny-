@@ -105,11 +105,12 @@ export default function OpenShiftsPage() {
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Chyba'); return }
       setAppliedGroups(prev => new Set(prev).add(shift.recurringGroupId!))
-      // Mark all shifts in group as applied
+      // Remove assigned shifts from open list
+      setOpenShifts(prev => prev.filter(s => s.recurringGroupId !== shift.recurringGroupId))
       const newApplied = new Set(appliedShifts)
       openShifts.filter(s => s.recurringGroupId === shift.recurringGroupId).forEach(s => newApplied.add(s.id))
       setAppliedShifts(newApplied)
-      toast.success(`Přihlášen/a na ${data.count} směn v sérii!`)
+      toast.success(`${data.count} směn přiřazeno! Uvidíš je v Moje směny.`)
     } catch { toast.error('Chyba připojení') }
   }
 
@@ -128,15 +129,18 @@ export default function OpenShiftsPage() {
           return
         }
         const created = await res.json()
-        const newApp: ShiftApplication = { id: created.id, shift, employee: user, status: 'pending', createdAt: created.createdAt }
+        const newApp: ShiftApplication = { id: created.id, shift, employee: user, status: 'approved', createdAt: created.createdAt }
         setApps(prev => [...prev, newApp])
+        // Remove from open shifts — now assigned
+        setOpenShifts(prev => prev.filter(s => s.id !== shift.id))
       } catch { toast.error('Chyba připojení'); return }
     } else {
-      const newApp: ShiftApplication = { id: `app-${Date.now()}`, shift, employee: user, status: 'pending', createdAt: format(new Date(), 'yyyy-MM-dd') }
+      const newApp: ShiftApplication = { id: `app-${Date.now()}`, shift, employee: user, status: 'approved', createdAt: format(new Date(), 'yyyy-MM-dd') }
       setApps(prev => [...prev, newApp])
+      setOpenShifts(prev => prev.filter(s => s.id !== shift.id))
     }
     setAppliedShifts(prev => new Set(prev).add(shift.id))
-    toast.success('Přihláška odeslána! Manažer vás bude informovat.')
+    toast.success('Směna přiřazena! Uvidíš ji v Moje směny.')
   }
 
   const handleApprove = async (appId: string) => {
