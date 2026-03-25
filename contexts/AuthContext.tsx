@@ -16,6 +16,22 @@ const DEMO_CODES: Record<string, string> = {
   '333333': 'biz-3',
 }
 
+// Cookie helpers — cookies survive iOS PWA restarts better than localStorage
+const COOKIE_USER_KEY = 'smenky_auth'
+const COOKIE_BIZ_KEY  = 'smenky_biz'
+const COOKIE_MAX_AGE  = 365 * 24 * 60 * 60 // 1 year
+
+function setCookie(name: string, value: string) {
+  document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${COOKIE_MAX_AGE};SameSite=Lax`
+}
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+function deleteCookie(name: string) {
+  document.cookie = `${name}=;path=/;max-age=0`
+}
+
 function getRegisteredUsers(): User[] {
   try { return JSON.parse(localStorage.getItem(REG_USERS_KEY) || '[]') } catch { return [] }
 }
@@ -56,13 +72,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      // Try localStorage first, then cookie fallback (iOS PWA clears localStorage)
+      let stored = localStorage.getItem(STORAGE_KEY)
+      if (!stored) stored = getCookie(COOKIE_USER_KEY)
+
       if (stored) {
         const parsedUser = JSON.parse(stored)
         setUser(parsedUser)
 
-        // Restore active business from localStorage (persists across browser restarts)
-        const storedBizId = localStorage.getItem(BIZ_STORAGE_KEY)
+        // Sync both storage mechanisms
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsedUser))
+        setCookie(COOKIE_USER_KEY, JSON.stringify(parsedUser))
+
+        // Restore active business
+        let storedBizId = localStorage.getItem(BIZ_STORAGE_KEY)
+          || getCookie(COOKIE_BIZ_KEY)
           || (parsedUser as any).businessId
         if (storedBizId) {
           const allBiz = [...BUSINESSES, ...getRegisteredBiz()]
@@ -71,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setActiveBusiness(biz)
             setJoinCode((biz as any).joinCode ?? null)
             localStorage.setItem(BIZ_STORAGE_KEY, biz.id)
+            setCookie(COOKIE_BIZ_KEY, biz.id)
           }
         }
       }
@@ -84,6 +109,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setActiveBusiness(biz)
     setJoinCode(code ?? null)
     localStorage.setItem(BIZ_STORAGE_KEY, biz.id)
+    setCookie(COOKIE_BIZ_KEY, biz.id)
+  }
+
+  function storeUser(u: User) {
+    const json = JSON.stringify(u)
+    localStorage.setItem(STORAGE_KEY, json)
+    setCookie(COOKIE_USER_KEY, json)
+    setUser(u)
   }
 
   // ─── login ──────────────────────────────────────────────────────────────────
@@ -93,11 +126,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const mockUser = ALL_USERS.find(u => u.email.toLowerCase() === email.toLowerCase())
     if (mockUser) {
       if (password !== '123456') return { success: false, error: 'Špatné heslo.' }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockUser))
-      setUser(mockUser)
+      storeUser(mockUser)
       if (mockUser.role === 'superadmin') {
         setActiveBusiness(null); setJoinCode(null)
         localStorage.removeItem(BIZ_STORAGE_KEY)
+        deleteCookie(COOKIE_BIZ_KEY)
       } else {
         const biz = BUSINESSES.find(b => b.id === (mockUser as any).businessId) ?? BUSINESSES[0]
         storeBiz(biz)
@@ -108,8 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 2. Check localStorage registered users (fast, offline)
     const regUser = getRegisteredUsers().find(u => u.email.toLowerCase() === email.toLowerCase())
     if (regUser) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(regUser))
-      setUser(regUser)
+      storeUser(regUser)
       const biz = getRegisteredBiz().find(b => b.id === (regUser as any).businessId)
       if (biz) storeBiz(biz, (biz as any).joinCode)
       return { success: true, role: regUser.role }
@@ -136,8 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           color: data.user.color,
           businessId: data.user.businessId ?? data.business?.id,
         }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
-        setUser(newUser)
+        storeUser(newUser)
 
         if (data.business) {
           const existing = getRegisteredBiz()
@@ -190,11 +221,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         businessId: result.user.businessId,
       }
 
-      // Cache in localStorage
+      // Cache in localStorage + cookie
       const existingUsers = getRegisteredUsers()
       localStorage.setItem(REG_USERS_KEY, JSON.stringify([...existingUsers, newUser]))
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
-      setUser(newUser)
+      storeUser(newUser)
 
       if (result.business) {
         const existingBiz = getRegisteredBiz()
@@ -218,6 +248,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(BIZ_STORAGE_KEY)
+    deleteCookie(COOKIE_USER_KEY)
+    deleteCookie(COOKIE_BIZ_KEY)
     setUser(null)
     setActiveBusiness(null)
     setJoinCode(null)
