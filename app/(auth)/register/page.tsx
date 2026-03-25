@@ -35,6 +35,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (!email.trim() || !email.includes('@')) { setError('Zadej platný e-mail.'); return }
     if (password.length < 6) { setError('Heslo musí mít alespoň 6 znaků.'); return }
     if (password !== confirmPassword) { setError('Hesla se neshodují.'); return }
     setLoading(true)
@@ -163,7 +164,7 @@ export default function RegisterPage() {
                   <div className="space-y-1.5">
                     <Label className="text-slate-300 text-xs">E-mail *</Label>
                     <Input
-                      type="email"
+                      type="text"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       placeholder="jan@firma.cz"
@@ -238,7 +239,7 @@ export default function RegisterPage() {
                 <div className="space-y-1.5">
                   <Label className="text-slate-300 text-xs">E-mail *</Label>
                   <Input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="jana@email.cz"
