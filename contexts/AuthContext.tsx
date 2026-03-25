@@ -122,12 +122,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email, password }),
       })
-      if (res.status === 401) {
+      if (!res.ok) {
         const data = await res.json()
-        return { success: false, error: data.error ?? 'Špatné heslo.' }
+        return { success: false, error: data.error ?? 'Přihlášení selhalo.' }
       }
       const data = await res.json()
-      if (data) {
+      if (data?.user) {
         const newUser: User & { businessId?: string } = {
           id:    data.user.id,
           name:  data.user.name,
@@ -163,38 +163,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     type: 'manager' | 'employee',
     data: RegisterData,
   ): Promise<AuthResult> => {
-    // Check mock + localStorage first
-    const allUsers = [...ALL_USERS, ...getRegisteredUsers()]
-    if (allUsers.find(u => u.email.toLowerCase() === data.email.toLowerCase())) {
+    // Check mock users (demo accounts can't be re-registered)
+    if (ALL_USERS.find(u => u.email.toLowerCase() === data.email.toLowerCase())) {
       return { success: false, error: 'Tento e-mail je již registrován.' }
     }
 
-    // Check demo codes (employee joining demo business — no DB needed)
-    if (type === 'employee') {
-      const codeStr    = data.joinCode?.trim() ?? ''
-      const demoBizId  = DEMO_CODES[codeStr]
-      if (demoBizId) {
-        const biz = BUSINESSES.find(b => b.id === demoBizId)
-        if (biz) {
-          const newUser: User & { businessId?: string } = {
-            id:    `u-reg-${Date.now()}`,
-            name:  data.name,
-            email: data.email,
-            role:  'employee',
-            color: '#6366f1',
-            businessId: biz.id,
-          }
-          const existing = getRegisteredUsers()
-          localStorage.setItem(REG_USERS_KEY, JSON.stringify([...existing, newUser]))
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
-          setUser(newUser)
-          storeBiz(biz)
-          return { success: true, role: 'employee' }
-        }
-      }
-    }
-
-    // Call register API (creates in DB)
+    // All registrations go through API → saved in DB (accessible from any device)
     try {
       const res = await fetch('/api/auth/register', {
         method:  'POST',

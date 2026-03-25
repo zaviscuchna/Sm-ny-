@@ -11,7 +11,9 @@ export async function POST(req: NextRequest) {
       'SELECT * FROM "User" WHERE email = $1',
       [email.toLowerCase()]
     )
-    if (userRes.rows.length === 0) return NextResponse.json(null)
+    if (userRes.rows.length === 0) {
+      return NextResponse.json({ error: 'Účet nenalezen. Zaregistruj se prosím.' }, { status: 404 })
+    }
 
     const user = userRes.rows[0]
 

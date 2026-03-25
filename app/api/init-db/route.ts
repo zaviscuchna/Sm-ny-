@@ -91,7 +91,34 @@ export async function GET(req: NextRequest) {
     // Idempotent migrations for new columns
     await client.query(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'`)
     await client.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS password_hash TEXT`)
-    return NextResponse.json({ ok: true, message: 'Tabulky vytvořeny.' })
+
+    // ShiftApplication table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "ShiftApplication" (
+        "id"            TEXT NOT NULL PRIMARY KEY,
+        "shift_id"      TEXT NOT NULL,
+        "employee_id"   TEXT NOT NULL,
+        "employee_name" TEXT NOT NULL,
+        "business_id"   TEXT NOT NULL,
+        "status"        TEXT NOT NULL DEFAULT 'approved',
+        "created_at"    TEXT NOT NULL
+      )
+    `)
+
+    // Ensure demo businesses exist in DB (so join codes 111111/222222/333333 work)
+    const demoBiz = [
+      { id: 'biz-1', name: 'Kavárna Aroma', location: 'Praha', code: '111111' },
+      { id: 'biz-2', name: 'Bistro Dvůr', location: 'Brno', code: '222222' },
+      { id: 'biz-3', name: 'Café Central', location: 'Ostrava', code: '333333' },
+    ]
+    for (const b of demoBiz) {
+      await client.query(
+        `INSERT INTO "Business" (id, name, location, join_code) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO NOTHING`,
+        [b.id, b.name, b.location, b.code]
+      )
+    }
+
+    return NextResponse.json({ ok: true, message: 'Tabulky vytvořeny, demo biznisy přidány.' })
   } catch (e: any) {
     return NextResponse.json({ error: 'Query failed', detail: e.message }, { status: 500 })
   } finally {
