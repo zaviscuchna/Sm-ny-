@@ -68,9 +68,9 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-4">
       {/* Card */}
-      <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
         {/* Header */}
         <div className="bg-indigo-600 px-8 py-8 text-center">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-white/15 rounded-xl mb-3">
@@ -83,20 +83,20 @@ function LoginForm() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-8 py-7 space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-slate-700">E-mail</Label>
+            <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">E-mail</Label>
             <Input
               id="email"
               type="email"
               placeholder="vas@email.cz"
               value={email}
               onChange={e => { setEmail(e.target.value); setError('') }}
-              className="border-slate-200 focus-visible:ring-indigo-500"
+              className="border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus-visible:ring-indigo-500"
               autoComplete="email"
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="password" className="text-slate-700">Heslo</Label>
+            <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">Heslo</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -104,13 +104,13 @@ function LoginForm() {
                 placeholder="••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="border-slate-200 focus-visible:ring-indigo-500 pr-10"
+                className="border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus-visible:ring-indigo-500 pr-10"
                 autoComplete="current-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPass(p => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
               >
                 {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -132,19 +132,19 @@ function LoginForm() {
 
         {/* Demo accounts */}
         <div className="px-8 pb-7">
-          <div className="border-t border-slate-100 pt-5">
-            <p className="text-xs text-slate-400 font-medium mb-3 uppercase tracking-wide">Demo přístupy</p>
+          <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+            <p className="text-xs text-slate-400 dark:text-slate-500 font-medium mb-3 uppercase tracking-wide">Demo přístupy</p>
             <div className="space-y-2">
               {DEMO_ACCOUNTS.map(acc => (
                 <button
                   key={acc.email}
                   type="button"
                   onClick={() => fillDemo(acc.email)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50 transition-all group"
+                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-all group"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 leading-tight">
+                      <div className="text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-indigo-700 dark:group-hover:text-indigo-400 leading-tight">
                         {acc.label}
                       </div>
                       <div className="text-[11px] text-slate-400">{acc.role}</div>
