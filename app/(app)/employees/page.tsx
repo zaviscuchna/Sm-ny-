@@ -31,6 +31,29 @@ function getHours(start: string, end: string) {
   return (eh + em / 60) - (sh + sm / 60)
 }
 
+function ManagerHoursCard({ sourceShifts, getHours }: { sourceShifts: Shift[], getHours: (s: string, e: string) => number }) {
+  const { user } = useAuth()
+  if (!user || user.role !== 'manager') return null
+  const managerShifts = sourceShifts.filter(s => s.assignedEmployee?.id === user.id)
+  const managerHours = managerShifts.reduce((h, s) => h + getHours(s.startTime, s.endTime), 0)
+  if (managerShifts.length === 0) return null
+  return (
+    <div className="mt-6 mb-2 bg-indigo-50/60 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/40 px-4 py-3.5 flex items-center gap-3">
+      <div className="w-9 h-9 rounded-xl bg-indigo-100 dark:bg-indigo-800/40 flex items-center justify-center">
+        <Clock className="w-4 h-4 text-indigo-500" />
+      </div>
+      <div className="flex-1">
+        <p className="text-xs font-semibold text-indigo-900 dark:text-indigo-200">Tvoje směny (manažer)</p>
+        <p className="text-[11px] text-indigo-500 dark:text-indigo-400">{managerShifts.length} směn přiřazeno</p>
+      </div>
+      <div className="text-right">
+        <p className="text-lg font-bold text-indigo-700 dark:text-indigo-300">{managerHours.toFixed(1)}h</p>
+        <p className="text-[10px] text-indigo-400">celkem</p>
+      </div>
+    </div>
+  )
+}
+
 export default function EmployeesPage() {
   const { activeBusiness, joinCode: authJoinCode } = useAuth()
   const [search, setSearch]   = useState('')
@@ -315,6 +338,9 @@ export default function EmployeesPage() {
             )
           })}
         </div>
+
+        {/* ── Manager hours (from assigned shifts) ─────────────────────────── */}
+        <ManagerHoursCard sourceShifts={sourceShifts} getHours={getHours} />
 
         {/* ── PAYROLL SECTION ──────────────────────────────────────────────── */}
         <div className="mt-6">
