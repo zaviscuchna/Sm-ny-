@@ -346,6 +346,14 @@ export default function OpenShiftsPage() {
                                 </div>
                               </div>
                               <Button
+                                size="sm"
+                                onClick={() => handleApply(shift)}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white h-8 text-xs"
+                              >
+                                <UserPlus className="w-3.5 h-3.5 mr-1" />
+                                Vzít směnu
+                              </Button>
+                              <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-8 text-xs text-slate-500 dark:text-slate-400"
