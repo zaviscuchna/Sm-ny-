@@ -5,7 +5,7 @@ import type { User, Business } from '@/types'
 import { ALL_USERS, BUSINESSES } from '@/lib/mock-data'
 
 const STORAGE_KEY     = 'smenky_user'
-const BIZ_SESSION_KEY = 'smenky_active_biz'
+const BIZ_STORAGE_KEY = 'smenky_active_biz'
 const REG_USERS_KEY   = 'smenky_reg_users'
 const REG_BIZ_KEY     = 'smenky_reg_biz'
 
@@ -61,9 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const parsedUser = JSON.parse(stored)
         setUser(parsedUser)
 
-        // Restore active business: sessionStorage first, then fall back to user.businessId
-        // (sessionStorage is cleared when browser closes, so fallback is critical)
-        const storedBizId = sessionStorage.getItem(BIZ_SESSION_KEY)
+        // Restore active business from localStorage (persists across browser restarts)
+        const storedBizId = localStorage.getItem(BIZ_STORAGE_KEY)
           || (parsedUser as any).businessId
         if (storedBizId) {
           const allBiz = [...BUSINESSES, ...getRegisteredBiz()]
@@ -71,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (biz) {
             setActiveBusiness(biz)
             setJoinCode((biz as any).joinCode ?? null)
-            sessionStorage.setItem(BIZ_SESSION_KEY, biz.id)
+            localStorage.setItem(BIZ_STORAGE_KEY, biz.id)
           }
         }
       }
@@ -84,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function storeBiz(biz: Business, code?: string) {
     setActiveBusiness(biz)
     setJoinCode(code ?? null)
-    sessionStorage.setItem(BIZ_SESSION_KEY, biz.id)
+    localStorage.setItem(BIZ_STORAGE_KEY, biz.id)
   }
 
   // ─── login ──────────────────────────────────────────────────────────────────
@@ -98,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(mockUser)
       if (mockUser.role === 'superadmin') {
         setActiveBusiness(null); setJoinCode(null)
-        sessionStorage.removeItem(BIZ_SESSION_KEY)
+        localStorage.removeItem(BIZ_STORAGE_KEY)
       } else {
         const biz = BUSINESSES.find(b => b.id === (mockUser as any).businessId) ?? BUSINESSES[0]
         storeBiz(biz)
@@ -129,12 +128,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const data = await res.json()
       if (data) {
-        const newUser: User = {
+        const newUser: User & { businessId?: string } = {
           id:    data.user.id,
           name:  data.user.name,
           email: data.user.email,
           role:  data.user.role,
           color: data.user.color,
+          businessId: data.user.businessId ?? data.business?.id,
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newUser))
         setUser(newUser)
@@ -243,7 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY)
-    sessionStorage.removeItem(BIZ_SESSION_KEY)
+    localStorage.removeItem(BIZ_STORAGE_KEY)
     setUser(null)
     setActiveBusiness(null)
     setJoinCode(null)
@@ -259,7 +259,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearBusiness = () => {
     setActiveBusiness(null)
     setJoinCode(null)
-    sessionStorage.removeItem(BIZ_SESSION_KEY)
+    localStorage.removeItem(BIZ_STORAGE_KEY)
   }
 
   return (
