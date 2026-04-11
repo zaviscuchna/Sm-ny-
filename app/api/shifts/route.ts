@@ -6,13 +6,21 @@ export async function GET(req: NextRequest) {
   if (!bizId) return NextResponse.json([], { status: 400 })
 
   const employeeId = req.nextUrl.searchParams.get('employeeId')
+  const branchId = req.nextUrl.searchParams.get('branchId')
+  const status = req.nextUrl.searchParams.get('status') // filter by status (e.g. 'completed')
 
   const client = await pool.connect()
   try {
+    let shiftQuery = 'SELECT s.*, b.name as branch_name, b.address as branch_address FROM "Shift" s LEFT JOIN "Branch" b ON b.id = s.branch_id WHERE s.business_id = $1'
+    const params: any[] = [bizId]
+    let idx = 2
+    if (employeeId) { shiftQuery += ` AND s.assigned_employee_id = $${idx++}`; params.push(employeeId) }
+    if (branchId) { shiftQuery += ` AND s.branch_id = $${idx++}`; params.push(branchId) }
+    if (status) { shiftQuery += ` AND s.status = $${idx++}`; params.push(status) }
+    shiftQuery += ' ORDER BY s.date'
+
     const [shiftsRes, empsRes] = await Promise.all([
-      employeeId
-        ? client.query('SELECT * FROM "Shift" WHERE business_id = $1 AND assigned_employee_id = $2 ORDER BY date', [bizId, employeeId])
-        : client.query('SELECT * FROM "Shift" WHERE business_id = $1 ORDER BY date', [bizId]),
+      client.query(shiftQuery, params),
       client.query('SELECT * FROM "User" WHERE business_id = $1', [bizId]),
     ])
 
@@ -22,6 +30,7 @@ export async function GET(req: NextRequest) {
     const shifts = shiftsRes.rows.map(row => ({
       id:               row.id,
       businessId:       row.business_id,
+      branchId:         row.branch_id ?? undefined,
       date:             row.date,
       startTime:        row.start_time,
       endTime:          row.end_time,
@@ -29,12 +38,15 @@ export async function GET(req: NextRequest) {
       status:           row.status,
       notes:            row.notes ?? undefined,
       recurringGroupId: row.recurring_group_id ?? undefined,
+      actualStart:      row.actual_start ?? undefined,
+      actualEnd:        row.actual_end ?? undefined,
       assignedEmployee: row.assigned_employee_id
         ? (() => {
             const e = empMap[row.assigned_employee_id]
             return e ? { id: e.id, name: e.name, email: e.email, role: e.role, color: e.color } : undefined
           })()
         : undefined,
+      branch: row.branch_name ? { id: row.branch_id, name: row.branch_name, address: row.branch_address } : undefined,
     }))
 
     return NextResponse.json(shifts)
@@ -44,7 +56,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, groupId, assignedEmployeeId, status, roleNeeded, startTime, endTime, date, notes } = await req.json()
+  const { id, groupId, assignedEmployeeId, status, roleNeeded, startTime, endTime, date, notes, branchId, actualStart, actualEnd } = await req.json()
   if (!id && !groupId) return NextResponse.json({ error: 'Missing id or groupId' }, { status: 400 })
   const client = await pool.connect()
   try {
@@ -59,6 +71,9 @@ export async function PATCH(req: NextRequest) {
     // date only applies to single shift edits, not group edits
     if (date !== undefined && !groupId) { sets.push(`date = $${idx++}`); vals.push(date) }
     if (notes       !== undefined) { sets.push(`notes = $${idx++}`);       vals.push(notes) }
+    if (branchId    !== undefined) { sets.push(`branch_id = $${idx++}`);   vals.push(branchId === null ? null : branchId) }
+    if (actualStart !== undefined) { sets.push(`actual_start = $${idx++}`); vals.push(actualStart === null ? null : actualStart) }
+    if (actualEnd   !== undefined) { sets.push(`actual_end = $${idx++}`);   vals.push(actualEnd === null ? null : actualEnd) }
     if (sets.length > 0) {
       vals.push(groupId ?? id)
       const where = groupId ? `recurring_group_id = $${idx}` : `id = $${idx}`
@@ -117,9 +132,9 @@ export async function POST(req: NextRequest) {
   try {
     for (const s of shifts) {
       await client.query(
-        `INSERT INTO "Shift" (id, business_id, date, start_time, end_time, role_needed, assigned_employee_id, status, notes, recurring_group_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [s.id, s.businessId, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null, s.recurringGroupId ?? null]
+        `INSERT INTO "Shift" (id, business_id, branch_id, date, start_time, end_time, role_needed, assigned_employee_id, status, notes, recurring_group_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [s.id, s.businessId, s.branchId ?? null, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null, s.recurringGroupId ?? null]
       )
     }
     return NextResponse.json({ ok: true })

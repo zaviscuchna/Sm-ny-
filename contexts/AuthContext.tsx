@@ -19,10 +19,13 @@ const DEMO_CODES: Record<string, string> = {
 // Cookie helpers — cookies survive iOS PWA restarts better than localStorage
 const COOKIE_USER_KEY = 'smenky_auth'
 const COOKIE_BIZ_KEY  = 'smenky_biz'
-const COOKIE_MAX_AGE  = 365 * 24 * 60 * 60 // 1 year
+const COOKIE_MAX_AGE_REMEMBER = 30 * 24 * 60 * 60 // 30 days
+const REMEMBER_KEY = 'smenky_remember'
 
-function setCookie(name: string, value: string) {
-  document.cookie = `${name}=${encodeURIComponent(value)};path=/;max-age=${COOKIE_MAX_AGE};SameSite=Lax`
+function setCookie(name: string, value: string, remember?: boolean) {
+  const shouldRemember = remember ?? (typeof window !== 'undefined' && localStorage.getItem(REMEMBER_KEY) === '1')
+  const maxAge = shouldRemember ? `;max-age=${COOKIE_MAX_AGE_REMEMBER}` : '' // session cookie when not remembered
+  document.cookie = `${name}=${encodeURIComponent(value)};path=/${maxAge};SameSite=Lax`
 }
 function getCookie(name: string): string | null {
   const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
@@ -55,7 +58,7 @@ interface AuthContextType {
   loading:        boolean
   activeBusiness: Business | null
   joinCode:       string | null
-  login:          (email: string, password: string) => Promise<AuthResult>
+  login:          (email: string, password: string, rememberMe?: boolean) => Promise<AuthResult>
   register:       (type: 'manager' | 'employee', data: RegisterData) => Promise<AuthResult>
   logout:         () => void
   switchBusiness: (bizId: string) => void
@@ -121,7 +124,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ─── login ──────────────────────────────────────────────────────────────────
 
-  const login = async (email: string, password: string): Promise<AuthResult> => {
+  const login = async (email: string, password: string, rememberMe?: boolean): Promise<AuthResult> => {
+    // Store remember preference
+    if (rememberMe !== undefined) {
+      localStorage.setItem(REMEMBER_KEY, rememberMe ? '1' : '0')
+    }
     // 1. Check mock users (demo — accept password '123456')
     const mockUser = ALL_USERS.find(u => u.email.toLowerCase() === email.toLowerCase())
     if (mockUser) {
@@ -248,6 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY)
     localStorage.removeItem(BIZ_STORAGE_KEY)
+    localStorage.removeItem(REMEMBER_KEY)
     deleteCookie(COOKIE_USER_KEY)
     deleteCookie(COOKIE_BIZ_KEY)
     setUser(null)

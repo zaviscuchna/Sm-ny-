@@ -63,6 +63,38 @@ export async function runMigrations() {
     await client.query(`ALTER TABLE "Business" ADD COLUMN IF NOT EXISTS positions TEXT NOT NULL DEFAULT '[]'`)
     await client.query(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS password_hash TEXT`)
     await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS recurring_group_id TEXT`)
+
+    // ── Branch (multi-pobočka) ──────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "Branch" (
+        "id"          TEXT NOT NULL PRIMARY KEY,
+        "name"        TEXT NOT NULL,
+        "address"     TEXT NOT NULL DEFAULT '',
+        "business_id" TEXT NOT NULL REFERENCES "Business"("id"),
+        "created_at"  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `)
+    await client.query(`CREATE INDEX IF NOT EXISTS "Branch_business_id_idx" ON "Branch"("business_id")`)
+
+    // ── EmployeeBranch (junction with permissions) ──────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "EmployeeBranch" (
+        "id"          TEXT NOT NULL PRIMARY KEY,
+        "user_id"     TEXT NOT NULL REFERENCES "User"("id"),
+        "branch_id"   TEXT NOT NULL REFERENCES "Branch"("id"),
+        "role"        TEXT NOT NULL DEFAULT 'employee',
+        "permissions" TEXT[] NOT NULL DEFAULT '{}',
+        UNIQUE("user_id", "branch_id")
+      )
+    `)
+    await client.query(`CREATE INDEX IF NOT EXISTS "EmployeeBranch_branch_id_idx" ON "EmployeeBranch"("branch_id")`)
+
+    // ── Shift extensions ────────────────────────────────────────────────────
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "branch_id" TEXT REFERENCES "Branch"("id")`)
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "actual_start" TEXT`)
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "actual_end" TEXT`)
+    await client.query(`CREATE INDEX IF NOT EXISTS "Shift_branch_id_idx" ON "Shift"("branch_id")`)
+
     console.log('[migrate] Migrations completed')
   } catch (e) {
     console.error('[migrate] Migration error:', e)

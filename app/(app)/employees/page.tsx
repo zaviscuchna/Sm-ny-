@@ -14,6 +14,7 @@ import type { Shift, User } from '@/types'
 import {
   Search, Phone, Mail, Copy, Check, Clock, CalendarDays,
   ChevronLeft, ChevronRight, Banknote, ChevronDown, ChevronUp, X,
+  MapPin, Shield,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import {
@@ -21,6 +22,10 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBranch } from '@/contexts/BranchContext'
+import { getEmployeeBranches, updateEmployeePermissions, assignEmployeeToBranch, removeEmployeeFromBranch } from '@/lib/db'
+import { ALL_PERMISSIONS } from '@/types'
+import type { Permission, EmployeeBranch } from '@/types'
 import { toast } from 'sonner'
 
 type SortKey = 'name' | 'hours'
@@ -64,16 +69,20 @@ export default function EmployeesPage() {
   const [baseEmployees, setBaseEmployees] = useState<User[]>([])
   const [bizShifts,     setBizShifts]     = useState<Shift[]>([])
   const [expandedEmp,   setExpandedEmp]   = useState<string | null>(null)
+  const { branches }   = useBranch()
+  const [empBranches,   setEmpBranches]   = useState<EmployeeBranch[]>([])
 
-  // Load employees + shifts
+  // Load employees + shifts + employee-branch mappings
   useEffect(() => {
     if (!activeBusiness) return
     Promise.all([
       getEmployeesForBusiness(activeBusiness.id),
       getShiftsForBusiness(activeBusiness.id),
-    ]).then(([emps, shifts]) => {
+      bizIsRegistered ? getEmployeeBranches({ bizId: activeBusiness.id }) : Promise.resolve([]),
+    ]).then(([emps, shifts, ebs]) => {
       setBaseEmployees(emps)
       setBizShifts(shifts)
+      setEmpBranches(ebs)
     })
   }, [activeBusiness?.id])
 
@@ -277,6 +286,81 @@ export default function EmployeesPage() {
                       <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-300" />{emp.email}</span>
                       {emp.phone && <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-slate-300" />{emp.phone}</span>}
                     </div>
+
+                    {/* Branches & Permissions (registered businesses only) */}
+                    {bizIsRegistered && branches.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
+                          <Shield className="w-3.5 h-3.5 text-indigo-500" />
+                          Pobočky a práva
+                        </p>
+                        <div className="space-y-3">
+                          {branches.map(branch => {
+                            const eb = empBranches.find(e => e.userId === emp.id && e.branchId === branch.id)
+                            const isAssigned = !!eb
+                            return (
+                              <div key={branch.id} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700 p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{branch.name}</span>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      if (isAssigned) {
+                                        await removeEmployeeFromBranch(eb.id)
+                                        setEmpBranches(prev => prev.filter(e => e.id !== eb.id))
+                                        toast.success('Zaměstnanec odebrán z pobočky')
+                                      } else {
+                                        await assignEmployeeToBranch(emp.id, branch.id)
+                                        const updated = await getEmployeeBranches({ bizId: activeBusiness!.id })
+                                        setEmpBranches(updated)
+                                        toast.success('Zaměstnanec přiřazen k pobočce')
+                                      }
+                                    }}
+                                    className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${
+                                      isAssigned
+                                        ? 'bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100'
+                                        : 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:bg-indigo-100'
+                                    }`}
+                                  >
+                                    {isAssigned ? 'Odebrat' : 'Přiřadit'}
+                                  </button>
+                                </div>
+                                {isAssigned && (
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    {ALL_PERMISSIONS.map(perm => {
+                                      const hasIt = eb.permissions?.includes(perm.key)
+                                      return (
+                                        <label key={perm.key} className="flex items-center gap-1.5 cursor-pointer group">
+                                          <input
+                                            type="checkbox"
+                                            checked={hasIt}
+                                            onChange={async () => {
+                                              const newPerms = hasIt
+                                                ? (eb.permissions ?? []).filter((p: string) => p !== perm.key)
+                                                : [...(eb.permissions ?? []), perm.key]
+                                              await updateEmployeePermissions(eb.id, newPerms as Permission[])
+                                              setEmpBranches(prev =>
+                                                prev.map(e => e.id === eb.id ? { ...e, permissions: newPerms as Permission[] } : e)
+                                              )
+                                            }}
+                                            className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                          />
+                                          <span className="text-[11px] text-slate-600 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200" title={perm.description}>
+                                            {perm.label}
+                                          </span>
+                                        </label>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Upcoming shifts */}
                     <div>

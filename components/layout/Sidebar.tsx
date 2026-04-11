@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, CalendarDays, Calendar, Clock, Users,
   UserCheck, LogOut, Coffee, ChevronRight,
-  Building2, ChevronLeft, ShieldCheck, Settings, QrCode,
+  Building2, ChevronLeft, ShieldCheck, Settings, QrCode, History, Calculator,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
@@ -28,6 +28,8 @@ const NAV: NavItem[] = [
   { href: '/open-shifts', label: 'Volné směny',     icon: Clock,           roles: ['manager', 'employee'] },
   { href: '/employees',   label: 'Zaměstnanci',     icon: Users,           roles: ['manager'] },
   { href: '/my-shifts',   label: 'Moje směny',      icon: UserCheck,       roles: ['employee'] },
+  { href: '/history',     label: 'Historie',         icon: History,         roles: ['manager', 'employee'] },
+  { href: '/payroll',     label: 'Výplaty',          icon: Calculator,      roles: ['manager', 'employee'] },
   { href: '/qr',          label: 'QR Docházka',      icon: QrCode,          roles: ['manager'] },
   { href: '/settings',    label: 'Nastavení',        icon: Settings,        roles: ['manager', 'employee'] },
 ]

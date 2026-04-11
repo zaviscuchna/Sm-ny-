@@ -105,6 +105,37 @@ export async function GET(req: NextRequest) {
       )
     `)
 
+    // ── Branch (multi-pobočka) ──────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "Branch" (
+        "id"          TEXT NOT NULL PRIMARY KEY,
+        "name"        TEXT NOT NULL,
+        "address"     TEXT NOT NULL DEFAULT '',
+        "business_id" TEXT NOT NULL REFERENCES "Business"("id"),
+        "created_at"  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `)
+    await client.query(`CREATE INDEX IF NOT EXISTS "Branch_business_id_idx" ON "Branch"("business_id")`)
+
+    // ── EmployeeBranch (junction with permissions) ──────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "EmployeeBranch" (
+        "id"          TEXT NOT NULL PRIMARY KEY,
+        "user_id"     TEXT NOT NULL REFERENCES "User"("id"),
+        "branch_id"   TEXT NOT NULL REFERENCES "Branch"("id"),
+        "role"        TEXT NOT NULL DEFAULT 'employee',
+        "permissions" TEXT[] NOT NULL DEFAULT '{}',
+        UNIQUE("user_id", "branch_id")
+      )
+    `)
+    await client.query(`CREATE INDEX IF NOT EXISTS "EmployeeBranch_branch_id_idx" ON "EmployeeBranch"("branch_id")`)
+
+    // ── Shift extensions ────────────────────────────────────────────────────
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "branch_id" TEXT REFERENCES "Branch"("id")`)
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "actual_start" TEXT`)
+    await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "actual_end" TEXT`)
+    await client.query(`CREATE INDEX IF NOT EXISTS "Shift_branch_id_idx" ON "Shift"("branch_id")`)
+
     // Ensure demo businesses exist in DB (so join codes 111111/222222/333333 work)
     const demoBiz = [
       { id: 'biz-1', name: 'Kavárna Aroma', location: 'Praha', code: '111111' },

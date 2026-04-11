@@ -8,7 +8,7 @@ import {
   SHIFTS, EMPLOYEES, EMPLOYEES_B2, EMPLOYEES_B3,
   SHIFTS_B2, SHIFTS_B3,
 } from './mock-data'
-import type { User, Business, Shift } from '@/types'
+import type { User, Business, Shift, Branch, EmployeeBranch, Permission } from '@/types'
 import type { WorkLog } from './work-logs'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -109,6 +109,61 @@ export async function deleteLogFromDB(id: string, bizId: string): Promise<void> 
     return
   }
   await fetch(`/api/work-logs?id=${id}`, { method: 'DELETE' })
+}
+
+// ─── Branches ────────────────────────────────────────────────────────────────
+
+export async function getBranchesForBusiness(bizId: string): Promise<Branch[]> {
+  if (!isRegistered(bizId)) return []
+  const res = await fetch(`/api/branches?bizId=${bizId}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function createBranch(bizId: string, name: string, address?: string): Promise<Branch> {
+  const res = await fetch('/api/branches', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bizId, name, address }),
+  })
+  if (!res.ok) throw new Error('Chyba při vytváření pobočky')
+  return res.json()
+}
+
+export async function deleteBranch(id: string): Promise<void> {
+  await fetch(`/api/branches?id=${id}`, { method: 'DELETE' })
+}
+
+// ─── Employee Branches / Permissions ─────────────────────────────────────────
+
+export async function getEmployeeBranches(params: { branchId?: string; userId?: string; bizId?: string }): Promise<EmployeeBranch[]> {
+  const query = new URLSearchParams()
+  if (params.branchId) query.set('branchId', params.branchId)
+  if (params.userId) query.set('userId', params.userId)
+  if (params.bizId) query.set('bizId', params.bizId)
+  const res = await fetch(`/api/employee-branches?${query}`)
+  if (!res.ok) return []
+  return res.json()
+}
+
+export async function assignEmployeeToBranch(userId: string, branchId: string, role?: string, permissions?: Permission[]): Promise<void> {
+  await fetch('/api/employee-branches', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, branchId, role, permissions }),
+  })
+}
+
+export async function updateEmployeePermissions(id: string, permissions: Permission[]): Promise<void> {
+  await fetch('/api/employee-branches', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, permissions }),
+  })
+}
+
+export async function removeEmployeeFromBranch(id: string): Promise<void> {
+  await fetch(`/api/employee-branches?id=${id}`, { method: 'DELETE' })
 }
 
 // ─── Businesses (used by AuthContext) ─────────────────────────────────────────

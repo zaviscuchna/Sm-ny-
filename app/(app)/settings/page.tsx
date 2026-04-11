@@ -7,9 +7,11 @@ import { UserAvatar } from '@/components/shared/UserAvatar'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Copy, Check, Building2, User, ShieldCheck, LogOut, Briefcase, Plus, X } from 'lucide-react'
+import { Copy, Check, Building2, User, ShieldCheck, LogOut, Briefcase, Plus, X, MapPin, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { useBranch } from '@/contexts/BranchContext'
+import type { Branch } from '@/types'
 
 export default function SettingsPage() {
   const { user, activeBusiness, joinCode: ctxJoinCode, logout } = useAuth()
@@ -18,6 +20,12 @@ export default function SettingsPage() {
   const [positions, setPositions] = useState<string[]>([])
   const [newPos, setNewPos] = useState('')
   const [savingPos, setSavingPos] = useState(false)
+
+  // Branch management
+  const { branches, refreshBranches } = useBranch()
+  const [newBranchName, setNewBranchName] = useState('')
+  const [newBranchAddr, setNewBranchAddr] = useState('')
+  const [savingBranch, setSavingBranch] = useState(false)
 
   useEffect(() => {
     if (!activeBusiness?.id.startsWith('biz-reg-')) return
@@ -31,6 +39,25 @@ export default function SettingsPage() {
   // Use join code from context (real code for Supabase businesses) or derive from id for demo
   const joinCode = ctxJoinCode
     ?? (activeBusiness ? activeBusiness.id.replace(/\D/g, '').slice(-6).padStart(6, '0') || '111111' : '111111')
+
+  const handleAddBranch = async () => {
+    if (!newBranchName.trim() || !activeBusiness) return
+    setSavingBranch(true)
+    try {
+      await fetch('/api/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bizId: activeBusiness.id, name: newBranchName.trim(), address: newBranchAddr.trim() }),
+      })
+      setNewBranchName('')
+      setNewBranchAddr('')
+      refreshBranches()
+      toast.success('Pobočka vytvořena')
+    } catch {
+      toast.error('Chyba při vytváření pobočky')
+    }
+    setSavingBranch(false)
+  }
 
   const addPosition = () => {
     const p = newPos.trim()
@@ -148,6 +175,74 @@ export default function SettingsPage() {
               {!isNewBusiness && (
                 <p className="text-xs text-slate-400">Demo podnik · úpravy jsou dostupné v placené verzi.</p>
               )}
+            </div>
+          </section>
+        )}
+
+        {/* Branches (pobočky) */}
+        {user?.role === 'manager' && isNewBusiness && (
+          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-50 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/60">
+              <MapPin className="w-4 h-4 text-slate-400" />
+              <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Pobočky</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-slate-500">Vytvořuj pobočky a přiřazuj k nim zaměstnance a směny.</p>
+
+              {branches.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">Zatím žádné pobočky — přidej první níže.</p>
+              ) : (
+                <div className="space-y-2">
+                  {branches.map(b => (
+                    <div key={b.id} className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3 border border-slate-100 dark:border-slate-700">
+                      <MapPin className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{b.name}</p>
+                        {b.address && <p className="text-xs text-slate-400">{b.address}</p>}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await fetch(`/api/branches?id=${b.id}`, { method: 'DELETE' })
+                          refreshBranches()
+                          toast.success('Pobočka smazána')
+                        }}
+                        className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                        title="Smazat pobočku"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-2">
+                  <Input
+                    placeholder="Název pobočky (např. Pobočka Centrum)"
+                    value={newBranchName}
+                    onChange={e => setNewBranchName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && newBranchName.trim() && handleAddBranch()}
+                    className="border-slate-200"
+                  />
+                  <Input
+                    placeholder="Adresa (volitelné)"
+                    value={newBranchAddr}
+                    onChange={e => setNewBranchAddr(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && newBranchName.trim() && handleAddBranch()}
+                    className="border-slate-200"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={handleAddBranch}
+                  disabled={savingBranch || !newBranchName.trim()}
+                  className="shrink-0 gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 self-end"
+                >
+                  <Plus className="w-4 h-4" />
+                  Přidat
+                </Button>
+              </div>
             </div>
           </section>
         )}

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBranch } from '@/contexts/BranchContext'
 import { createShiftsInDB, isRegistered } from '@/lib/db'
 import type { User, Shift } from '@/types'
 import { toast } from 'sonner'
@@ -76,8 +77,10 @@ function generateRepeatDates(
 
 export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsCreated }: Props) {
   const { activeBusiness } = useAuth()
+  const { branches, activeBranch } = useBranch()
   const [open, setOpen] = useState(false)
   const [businessPositions, setBusinessPositions] = useState<string[] | null>(null)
+  const [branchId, setBranchId] = useState<string>(activeBranch?.id ?? 'none')
 
   useEffect(() => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
@@ -132,9 +135,12 @@ export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsC
     const dates = generateRepeatDates(date, repeatType, repeatUntil || date, repeatDays)
     const groupId = repeatType !== 'none' ? `rg-${Date.now()}` : undefined
 
+    const selectedBranchId = branchId !== 'none' ? branchId : undefined
+
     const newShifts: Shift[] = dates.map((d, i) => ({
       id:               `s-${Date.now()}-${i}`,
       businessId:       activeBusiness?.id ?? 'biz-1',
+      branchId:         selectedBranchId,
       date:             d,
       startTime,
       endTime,
@@ -167,7 +173,7 @@ export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsC
     else toast.success('Směna uložena')
 
     setOpen(false)
-    setRole(''); setCustomRole(''); setEmployeeId('none'); setNotes('')
+    setRole(''); setCustomRole(''); setEmployeeId('none'); setNotes(''); setBranchId(activeBranch?.id ?? 'none')
     setRepeatType('none'); setRepeatUntil(''); setRepeatDays([1,2,3,4,5])
     setSaving(false)
   }
@@ -214,6 +220,24 @@ export function NewShiftDialog({ trigger, defaultDate, employees = [], onShiftsC
                 onChange={e => setEndTime(e.target.value)} className="border-slate-200" />
             </div>
           </div>
+
+          {/* Branch */}
+          {branches.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>Pobočka <span className="text-slate-400 font-normal">(volitelné)</span></Label>
+              <Select value={branchId} onValueChange={setBranchId}>
+                <SelectTrigger className="border-slate-200">
+                  <SelectValue placeholder="Bez pobočky" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Bez pobočky</SelectItem>
+                  {branches.map(b => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}{b.address ? ` · ${b.address}` : ''}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Role */}
           <div className="space-y-1.5">

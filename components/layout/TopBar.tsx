@@ -21,6 +21,11 @@ import { isRegistered } from '@/lib/db'
 import { format, parseISO } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import Link from 'next/link'
+import { BranchSwitcher } from '@/components/shared/BranchSwitcher'
+
+function BranchSwitcherInline() {
+  return <BranchSwitcher className="w-full" />
+}
 
 interface TopBarProps {
   title: string
@@ -119,6 +124,11 @@ export function TopBar({ title, subtitle }: TopBarProps) {
           <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 leading-tight">{title}</h1>
           {subtitle && <p className="text-xs text-slate-400 dark:text-slate-500">{subtitle}</p>}
         </div>
+      </div>
+
+      {/* Branch switcher (between title and right actions) */}
+      <div className="hidden md:flex flex-1 justify-center max-w-xs mx-4">
+        <BranchSwitcherInline />
       </div>
 
       <div className="flex items-center gap-2">

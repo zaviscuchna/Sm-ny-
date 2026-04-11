@@ -21,11 +21,12 @@ function LoginForm() {
   const searchParams = useSearchParams()
   const { login } = useAuth()
 
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [showPass, setShowPass] = useState(false)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [email, setEmail]           = useState('')
+  const [password, setPassword]     = useState('')
+  const [showPass, setShowPass]     = useState(false)
+  const [rememberMe, setRememberMe] = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
 
   useEffect(() => {
     const demoEmail = searchParams.get('demo')
@@ -43,7 +44,7 @@ function LoginForm() {
     setLoading(true)
     await new Promise(r => setTimeout(r, 400))
 
-    const result = await login(email, password)
+    const result = await login(email, password, rememberMe)
     setLoading(false)
 
     if (!result.success) {
@@ -116,6 +117,17 @@ function LoginForm() {
               </button>
             </div>
           </div>
+
+          {/* Remember me */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={e => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-sm text-slate-600 dark:text-slate-400">Zapamatovat mě</span>
+          </label>
 
           {error && (
             <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>

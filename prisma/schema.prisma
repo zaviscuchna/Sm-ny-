@@ -15,23 +15,52 @@ model Business {
   users     User[]
   shifts    Shift[]
   work_logs WorkLog[]
+  branches  Branch[]
+}
+
+model Branch {
+  id          String           @id @default(cuid())
+  name        String
+  address     String           @default("")
+  business_id String
+  created_at  DateTime         @default(now())
+  business    Business         @relation(fields: [business_id], references: [id])
+  employees   EmployeeBranch[]
+  shifts      Shift[]
+
+  @@index([business_id])
+}
+
+model EmployeeBranch {
+  id          String   @id @default(cuid())
+  user_id     String
+  branch_id   String
+  role        String   @default("employee")
+  permissions String[] @default([])
+  user        User     @relation(fields: [user_id], references: [id])
+  branch      Branch   @relation(fields: [branch_id], references: [id])
+
+  @@unique([user_id, branch_id])
+  @@index([branch_id])
 }
 
 model User {
-  id          String    @id
+  id          String           @id
   name        String
-  email       String    @unique
+  email       String           @unique
   role        String
   color       String
   phone       String?
   business_id String
-  business    Business  @relation(fields: [business_id], references: [id])
+  business    Business         @relation(fields: [business_id], references: [id])
   work_logs   WorkLog[]
+  branches    EmployeeBranch[]
 }
 
 model Shift {
-  id                   String   @id
+  id                   String             @id
   business_id          String
+  branch_id            String?
   date                 String
   start_time           String
   end_time             String
@@ -40,7 +69,26 @@ model Shift {
   status               String
   notes                String?
   recurring_group_id   String?
-  business             Business @relation(fields: [business_id], references: [id])
+  actual_start         String?
+  actual_end           String?
+  business             Business           @relation(fields: [business_id], references: [id])
+  branch               Branch?            @relation(fields: [branch_id], references: [id])
+  applications         ShiftApplication[]
+
+  @@index([business_id])
+  @@index([branch_id])
+}
+
+model ShiftApplication {
+  id          String   @id @default(cuid())
+  shift_id    String
+  employee_id String
+  status      String   @default("pending")
+  created_at  DateTime @default(now())
+  shift       Shift    @relation(fields: [shift_id], references: [id])
+
+  @@index([shift_id])
+  @@index([employee_id])
 }
 
 model WorkLog {
