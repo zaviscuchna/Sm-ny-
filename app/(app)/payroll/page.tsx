@@ -6,8 +6,9 @@ import { cs } from 'date-fns/locale'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { useAuth } from '@/contexts/AuthContext'
-import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
+import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness, getLogsForBusiness, getLogsForEmployee } from '@/lib/db'
 import type { Shift, User } from '@/types'
+import type { WorkLog } from '@/lib/work-logs'
 import {
   Calculator, ChevronLeft, ChevronRight, Printer, Banknote,
 } from 'lucide-react'
@@ -30,6 +31,7 @@ export default function PayrollPage() {
   const printRef = useRef<HTMLDivElement>(null)
 
   const [shifts, setShifts] = useState<Shift[]>([])
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>([])
   const [employees, setEmployees] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -41,48 +43,77 @@ export default function PayrollPage() {
   const [hourlyRate, setHourlyRate] = useState<string>('')
 
   useEffect(() => {
-    if (!activeBusiness) return
+    if (!activeBusiness || !user) return
     setLoading(true)
     Promise.all([
       getShiftsForBusiness(activeBusiness.id),
       isManager ? getEmployeesForBusiness(activeBusiness.id) : Promise.resolve([]),
-    ]).then(([s, e]) => {
+      isManager
+        ? getLogsForBusiness(activeBusiness.id, month)
+        : getLogsForEmployee(user.id, activeBusiness.id),
+    ]).then(([s, e, logs]) => {
       setShifts(s)
       setEmployees(e)
+      setWorkLogs(logs)
     }).finally(() => setLoading(false))
-  }, [activeBusiness?.id])
+  }, [activeBusiness?.id, user?.id, month])
 
-  // Compute payroll data
+  // Compute payroll data — combine WorkLogs + past Shifts
   const payrollData = useMemo(() => {
     const today = format(new Date(), 'yyyy-MM-dd')
     const effectiveFrom = dateFrom || `${month}-01`
     const effectiveTo = dateTo || format(endOfMonth(parseISO(`${month}-01`)), 'yyyy-MM-dd')
 
-    let filtered = shifts.filter(s => {
+    const map: Record<string, { user: User; hours: number; entries: number }> = {}
+    const usedDates = new Set<string>()
+
+    // 1. WorkLogs (primary source)
+    let filteredLogs = workLogs.filter(l => l.date >= effectiveFrom && l.date <= effectiveTo)
+    if (!isManager) {
+      filteredLogs = filteredLogs.filter(l => l.employeeId === user?.id)
+    } else if (selectedEmpId !== 'all') {
+      filteredLogs = filteredLogs.filter(l => l.employeeId === selectedEmpId)
+    }
+
+    filteredLogs.forEach(l => {
+      usedDates.add(`${l.employeeId}-${l.date}`)
+      if (!map[l.employeeId]) {
+        const emp = employees.find(e => e.id === l.employeeId)
+        map[l.employeeId] = {
+          user: emp ?? { id: l.employeeId, name: l.employeeName, email: '', role: 'employee' as const },
+          hours: 0, entries: 0,
+        }
+      }
+      map[l.employeeId].hours += l.hours
+      map[l.employeeId].entries++
+    })
+
+    // 2. Past shifts (only if no worklog for that employee+date)
+    let filteredShifts = shifts.filter(s => {
       const isPast = s.date < today
       const isCompleted = s.status === 'completed'
       return (isPast && s.assignedEmployee) || isCompleted
     }).filter(s => s.date >= effectiveFrom && s.date <= effectiveTo)
 
     if (!isManager) {
-      filtered = filtered.filter(s => s.assignedEmployee?.id === user?.id)
+      filteredShifts = filteredShifts.filter(s => s.assignedEmployee?.id === user?.id)
     } else if (selectedEmpId !== 'all') {
-      filtered = filtered.filter(s => s.assignedEmployee?.id === selectedEmpId)
+      filteredShifts = filteredShifts.filter(s => s.assignedEmployee?.id === selectedEmpId)
     }
 
-    // Group by employee
-    const map: Record<string, { user: User; hours: number; shifts: Shift[] }> = {}
-    filtered.forEach(s => {
+    filteredShifts.forEach(s => {
       if (!s.assignedEmployee) return
-      const eid = s.assignedEmployee.id
-      if (!map[eid]) map[eid] = { user: s.assignedEmployee, hours: 0, shifts: [] }
+      if (usedDates.has(`${s.assignedEmployee.id}-${s.date}`)) return
       const h = s.actualStart && s.actualEnd ? getHours(s.actualStart, s.actualEnd) : getHours(s.startTime, s.endTime)
-      map[eid].hours += h
-      map[eid].shifts.push(s)
+      if (!map[s.assignedEmployee.id]) {
+        map[s.assignedEmployee.id] = { user: s.assignedEmployee, hours: 0, entries: 0 }
+      }
+      map[s.assignedEmployee.id].hours += h
+      map[s.assignedEmployee.id].entries++
     })
 
     return Object.values(map).sort((a, b) => a.user.name.localeCompare(b.user.name, 'cs'))
-  }, [shifts, month, dateFrom, dateTo, selectedEmpId, user?.id, isManager])
+  }, [shifts, workLogs, month, dateFrom, dateTo, selectedEmpId, user?.id, isManager, employees])
 
   const totalHours = payrollData.reduce((acc, d) => acc + d.hours, 0)
   const rate = parseFloat(hourlyRate) || 0
@@ -238,7 +269,7 @@ export default function PayrollPage() {
                             <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{d.user.name}</span>
                           </div>
                         </td>
-                        <td className="px-5 py-3 text-xs text-slate-500 text-right">{d.shifts.length}</td>
+                        <td className="px-5 py-3 text-xs text-slate-500 text-right">{d.entries}</td>
                         <td className="px-5 py-3 text-sm font-bold text-slate-800 dark:text-slate-200 text-right">
                           {Math.round(d.hours * 10) / 10}h
                         </td>
@@ -254,7 +285,7 @@ export default function PayrollPage() {
                     <tr className="border-t-2 border-slate-200 dark:border-slate-700">
                       <td className="px-5 py-3 text-sm font-semibold text-slate-600 dark:text-slate-400">Celkem</td>
                       <td className="px-5 py-3 text-xs text-slate-500 text-right">
-                        {payrollData.reduce((acc, d) => acc + d.shifts.length, 0)}
+                        {payrollData.reduce((acc, d) => acc + d.entries, 0)}
                       </td>
                       <td className="px-5 py-3 text-sm font-bold text-slate-800 dark:text-slate-200 text-right">
                         {Math.round(totalHours * 10) / 10}h
