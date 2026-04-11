@@ -32,7 +32,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export default function ShiftsPage() {
-  const { activeBusiness } = useAuth()
+  const { user, activeBusiness } = useAuth()
   const [weekOffset, setWeekOffset]       = useState(0)
   const [dbShifts,   setDbShifts]         = useState<Shift[]>([])
   const [extraShifts, setExtraShifts]     = useState<Shift[]>([])
@@ -51,7 +51,12 @@ export default function ShiftsPage() {
       getEmployeesForBusiness(activeBusiness.id),
     ]).then(([shifts, emps]) => {
       setDbShifts(shifts)
-      setEmployees(emps)
+      // Include manager in assignable list so they can assign themselves
+      if (user && user.role === 'manager' && !emps.find(e => e.id === user.id)) {
+        setEmployees([{ id: user.id, name: user.name, email: user.email, role: user.role, color: user.color }, ...emps])
+      } else {
+        setEmployees(emps)
+      }
     }).finally(() => setLoadingShifts(false))
   }, [activeBusiness?.id])
 
