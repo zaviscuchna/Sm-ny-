@@ -1,17 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
 import bcrypt from 'bcryptjs'
 
-const TOKEN = 'e68686c54de618deb4cd7a2f8ce029b87afcafd906fdca46'
 const EMAIL = 'matyasjh@gmail.com'
 const NEW_PASSWORD = 'Matyas2026!'
 
-export async function GET(req: NextRequest) {
-  const token = req.nextUrl.searchParams.get('token')
-  if (token !== TOKEN) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export async function GET() {
   const client = await pool.connect()
   try {
     const hash = await bcrypt.hash(NEW_PASSWORD, 10)
