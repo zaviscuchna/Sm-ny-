@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       business: { id: bizId, name: bizName, location: bizLocation },
       joinCode: code,
     })
-    setSessionCookie(res, {
+    await setSessionCookie(res, {
       userId: userId,
       bizId:  bizId,
       role:   role as 'manager' | 'employee',

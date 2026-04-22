@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       business: biz ? { id: biz.id, name: biz.name, location: biz.location } : null,
       joinCode:  biz?.join_code ?? null,
     })
-    setSessionCookie(res, {
+    await setSessionCookie(res, {
       userId: user.id,
       bizId:  user.business_id,
       role:   user.role,
