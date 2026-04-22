@@ -75,16 +75,24 @@ export default function CalendarPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [shifts,     setShifts]     = useState<Shift[]>([])
   const [employees,  setEmployees]  = useState<User[]>([])
-  const [showTeam,   setShowTeam]   = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('smenky_cal_showteam') === '1'
-  })
+  const [showTeam,   setShowTeam]   = useState(false)
+  const [hydrated,   setHydrated]   = useState(false)
+
+  // Load persisted toggle AFTER hydration — jinak server-renderovaný HTML
+  // nesedí s klientem a Next.js 16 hodí "Application error".
+  useEffect(() => {
+    try {
+      setShowTeam(localStorage.getItem('smenky_cal_showteam') === '1')
+    } catch {}
+    setHydrated(true)
+  }, [])
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (!hydrated) return
+    try {
       localStorage.setItem('smenky_cal_showteam', showTeam ? '1' : '0')
-    }
-  }, [showTeam])
+    } catch {}
+  }, [showTeam, hydrated])
   const [dragging,   setDragging]   = useState<DragState | null>(null)
   const [mousePos,   setMousePos]   = useState<{ x: number; y: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
