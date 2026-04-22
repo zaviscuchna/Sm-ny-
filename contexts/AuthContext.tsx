@@ -102,31 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false)
   }, [])
 
-  // Separate effect: validate session cookie for registered users after mount.
-  // If cookie is expired, wipe local state to force re-login.
-  useEffect(() => {
-    if (!user) return
-    const bizId = (user as any).businessId
-    if (typeof bizId !== 'string' || !bizId.startsWith('biz-reg-')) return
-
-    let cancelled = false
-    fetch('/api/auth/me', { credentials: 'same-origin' })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (cancelled) return
-        if (data && !data.user) {
-          localStorage.removeItem(STORAGE_KEY)
-          localStorage.removeItem(BIZ_STORAGE_KEY)
-          deleteCookie(COOKIE_USER_KEY)
-          deleteCookie(COOKIE_BIZ_KEY)
-          setUser(null)
-          setActiveBusiness(null)
-          setJoinCode(null)
-        }
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [user?.id])
+  // Dříve tu byla auto-validace /api/auth/me při mountu — odstraněno, protože
+  // race-condition s login redirectem vykopávalo uživatele zpátky na login.
+  // Expirovaná sezení teď uživatel detekuje tím, že se mu nenačítají data a
+  // musí se manuálně odhlásit a přihlásit.
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -278,19 +257,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
   }
 
-  // Listen for runtime "session expired" events fired from any page
-  useEffect(() => {
-    function onExpired() {
-      if (user) {
-        logout()
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login?expired=1'
-        }
-      }
-    }
-    window.addEventListener('auth:expired', onExpired)
-    return () => window.removeEventListener('auth:expired', onExpired)
-  }, [user])
+  // Note: auth:expired listener byl odstraněn — spouštěl auth loop po loginu.
+  // 401 handling se teď dělá defensivně na úrovni fetchů (vrátí prázdné pole),
+  // uživatel musí při problému kliknout na "Odhlásit se" ručně.
 
   const switchBusiness = (bizId: string) => {
     const allBiz = [...BUSINESSES, ...getRegisteredBiz()]

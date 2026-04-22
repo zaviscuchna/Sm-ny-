@@ -11,18 +11,9 @@ import {
 import type { User, Business, Shift, Branch, EmployeeBranch, Permission } from '@/types'
 import type { WorkLog } from './work-logs'
 
-// Pomocný wrapper — na 401 odhlásí klienta (AuthContext listener) a vrátí fallback
-async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(url, init)
-  if (res.status === 401 && typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('auth:expired'))
-  }
-  return res
-}
-
 async function safeArray<T>(url: string): Promise<T[]> {
   try {
-    const res = await apiFetch(url)
+    const res = await fetch(url)
     if (!res.ok) return []
     const data = await res.json().catch(() => null)
     return Array.isArray(data) ? (data as T[]) : []
