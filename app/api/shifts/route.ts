@@ -31,7 +31,9 @@ export async function GET(req: NextRequest) {
     const params: any[] = [bizId]
     let idx = 2
     if (employeeId) { shiftQuery += ` AND s.assigned_employee_id = $${idx++}`; params.push(employeeId) }
-    if (branchId) { shiftQuery += ` AND s.branch_id = $${idx++}`; params.push(branchId) }
+    // Filter by branch — ale včetně NULL branches (směny vytvořené bez přiřazení k pobočce),
+    // aby se "osiřelé" směny zobrazily v každém branch filtru, ne aby zmizely.
+    if (branchId) { shiftQuery += ` AND (s.branch_id = $${idx} OR s.branch_id IS NULL)`; params.push(branchId); idx++ }
     if (status) { shiftQuery += ` AND s.status = $${idx++}`; params.push(status) }
     shiftQuery += ' ORDER BY s.date'
 
