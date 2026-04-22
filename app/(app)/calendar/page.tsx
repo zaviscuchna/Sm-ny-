@@ -75,14 +75,17 @@ export default function CalendarPage() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [shifts,     setShifts]     = useState<Shift[]>([])
   const [employees,  setEmployees]  = useState<User[]>([])
-  const [showTeam,   setShowTeam]   = useState(false)
+  // Default pro zaměstnance: Tým (vidí všechno). Když chtějí jen svoje, přepnou.
+  // Jinak zaměstnanec, který ještě nemá přiřazené směny, viděl prázdný kalendář.
+  const [showTeam,   setShowTeam]   = useState(true)
   const [hydrated,   setHydrated]   = useState(false)
 
   // Load persisted toggle AFTER hydration — jinak server-renderovaný HTML
   // nesedí s klientem a Next.js 16 hodí "Application error".
   useEffect(() => {
     try {
-      setShowTeam(localStorage.getItem('smenky_cal_showteam') === '1')
+      const saved = localStorage.getItem('smenky_cal_showteam')
+      if (saved !== null) setShowTeam(saved === '1')
     } catch {}
     setHydrated(true)
   }, [])

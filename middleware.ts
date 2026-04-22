@@ -7,7 +7,6 @@ const PUBLIC_API_ROUTES = [
   '/api/auth/logout',
   '/api/auth/me',
   '/api/init-db',
-  '/api/admin/diag',
 ]
 
 export async function middleware(req: NextRequest) {
