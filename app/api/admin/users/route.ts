@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import { getSession } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret')
-  if (secret !== 'ksh-init-2026') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getSession(req)
+  if (!session || session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const client = await pool.connect()
@@ -24,9 +25,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get('secret')
-  if (secret !== 'ksh-init-2026') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await getSession(req)
+  if (!session || session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const email = req.nextUrl.searchParams.get('email')

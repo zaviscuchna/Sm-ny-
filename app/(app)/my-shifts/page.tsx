@@ -11,9 +11,27 @@ import { sumHours } from '@/lib/work-logs'
 import { getLogsForEmployee, saveLogToDB, deleteLogFromDB, getShiftsForBusiness, isRegistered } from '@/lib/db'
 import type { WorkLog } from '@/lib/work-logs'
 import type { Shift } from '@/types'
-import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight, Handshake, ArrowRightLeft, X as XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { UserAvatar } from '@/components/shared/UserAvatar'
 import { toast } from 'sonner'
+
+interface SwapRequest {
+  id: string
+  fromUserId: string
+  toUserId: string
+  fromShiftId: string
+  toShiftId: string
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
+  message?: string
+  createdAt: string
+  fromShift: { id: string; date: string; startTime: string; endTime: string; roleNeeded: string; branchName: string | null }
+  toShift:   { id: string; date: string; startTime: string; endTime: string; roleNeeded: string; branchName: string | null }
+  fromUser:  { id: string; name: string; color: string }
+  toUser:    { id: string; name: string; color: string }
+}
+
+interface Colleague { id: string; name: string; color: string; email: string }
 
 function getDuration(start: string, end: string) {
   const [sh, sm] = start.split(':').map(Number)
@@ -59,6 +77,31 @@ export default function MyShiftsPage() {
 
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
   const [confirmedShifts, setConfirmedShifts] = useState<Set<string>>(new Set())
+  const [swaps, setSwaps] = useState<SwapRequest[]>([])
+  const [colleagues, setColleagues] = useState<Colleague[]>([])
+  const [swapDialog, setSwapDialog] = useState<{ myShift: Shift } | null>(null)
+  const [swapPickedUserId, setSwapPickedUserId] = useState<string>('')
+  const [swapPickedShiftId, setSwapPickedShiftId] = useState<string>('')
+  const [swapMessage, setSwapMessage] = useState('')
+
+  // Fetch colleagues + swaps
+  useEffect(() => {
+    if (!activeBusiness || !user) return
+    if (!isRegistered(activeBusiness.id)) return
+    fetch(`/api/employees?bizId=${activeBusiness.id}`)
+      .then(r => r.json())
+      .then((emps: Colleague[]) => setColleagues(emps.filter(e => e.id !== user.id)))
+      .catch(() => {})
+    loadSwaps()
+  }, [activeBusiness?.id, user?.id])
+
+  const loadSwaps = () => {
+    if (!activeBusiness || !user || !isRegistered(activeBusiness.id)) return
+    fetch(`/api/shift-swaps?status=pending`)
+      .then(r => r.json())
+      .then((data: SwapRequest[]) => setSwaps(Array.isArray(data) ? data : []))
+      .catch(() => {})
+  }
 
   // Load existing applications from DB
   useEffect(() => {
@@ -163,6 +206,92 @@ export default function MyShiftsPage() {
     toast.success('Směna potvrzena!')
   }
 
+  const [giveUpConfirm, setGiveUpConfirm] = useState<string | null>(null)
+
+  // Shifts for the selected colleague (to propose swap)
+  const colleagueShifts = allBizShifts
+    .filter(s => s.assignedEmployee?.id === swapPickedUserId && s.date >= todayStr && s.status !== 'open')
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const openSwapDialog = (myShift: Shift) => {
+    setSwapDialog({ myShift })
+    setSwapPickedUserId('')
+    setSwapPickedShiftId('')
+    setSwapMessage('')
+  }
+
+  const handleProposeSwap = async () => {
+    if (!swapDialog || !swapPickedUserId || !swapPickedShiftId) return
+    const res = await fetch('/api/shift-swaps', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fromShiftId: swapDialog.myShift.id,
+        toShiftId: swapPickedShiftId,
+        toUserId: swapPickedUserId,
+        message: swapMessage.trim() || undefined,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? 'Chyba při návrhu výměny')
+      return
+    }
+    toast.success('Návrh výměny odeslán — čekej na odpověď kolegy')
+    setSwapDialog(null)
+    loadSwaps()
+  }
+
+  const handleSwapAction = async (swapId: string, action: 'accept' | 'reject') => {
+    const res = await fetch(`/api/shift-swaps?id=${swapId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? 'Chyba')
+      loadSwaps()
+      return
+    }
+    if (action === 'accept') {
+      toast.success('Výměna schválena — směny se prohodily')
+      // Reload shifts, swaps
+      if (activeBusiness && user && isRegistered(activeBusiness.id)) {
+        fetch(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`).then(r => r.json()).then(setMyShiftsRaw).catch(() => {})
+        fetch(`/api/shifts?bizId=${activeBusiness.id}`).then(r => r.json()).then(setAllBizShifts).catch(() => {})
+      }
+    } else {
+      toast(action === 'reject' ? 'Výměna odmítnuta' : 'Výměna zrušena')
+    }
+    loadSwaps()
+  }
+
+  const handleGiveUp = async (shiftId: string) => {
+    if (!activeBusiness) return
+    if (!isRegistered(activeBusiness.id)) {
+      setMyShiftsRaw(prev => prev.filter(s => s.id !== shiftId))
+      setAllBizShifts(prev => prev.map(s => s.id === shiftId ? { ...s, assignedEmployee: undefined, status: 'open' } : s))
+      toast.success('Směna nabídnuta k převzetí')
+      setGiveUpConfirm(null)
+      return
+    }
+    const res = await fetch('/api/shifts/give-up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shiftId }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? 'Chyba — směnu nelze uvolnit')
+      return
+    }
+    setMyShiftsRaw(prev => prev.filter(s => s.id !== shiftId))
+    setAllBizShifts(prev => prev.map(s => s.id === shiftId ? { ...s, assignedEmployee: undefined, status: 'open' } : s))
+    toast.success('Směna nabídnuta k převzetí — uvidí ji ostatní v Volných směnách')
+    setGiveUpConfirm(null)
+  }
+
   const totalHours = upcomingShifts.reduce((acc, s) => {
     const [sh, sm] = s.startTime.split(':').map(Number)
     const [eh, em] = s.endTime.split(':').map(Number)
@@ -190,6 +319,85 @@ export default function MyShiftsPage() {
             </div>
           ))}
         </div>
+
+        {/* Swap requests */}
+        {swaps.length > 0 && (
+          <section>
+            <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+              <ArrowRightLeft className="w-4 h-4 text-purple-500" />
+              Návrhy výměn ({swaps.length})
+            </h2>
+            <div className="space-y-2">
+              {swaps.map(sw => {
+                const isIncoming = sw.toUserId === user?.id
+                const theirs  = isIncoming ? sw.fromShift : sw.toShift
+                const mine    = isIncoming ? sw.toShift   : sw.fromShift
+                const them    = isIncoming ? sw.fromUser  : sw.toUser
+                return (
+                  <div key={sw.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-purple-100 dark:border-purple-900/40 shadow-sm p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <UserAvatar name={them.name} color={them.color} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          {isIncoming ? `${them.name} ti navrhuje výměnu` : `Navrhl/as výměnu s ${them.name}`}
+                        </p>
+                        {sw.message && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 italic mt-0.5">&ldquo;{sw.message}&rdquo;</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center text-xs bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3">
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase">{isIncoming ? 'Ty dostaneš' : 'Ty se vzdáváš'}</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200">{theirs.roleNeeded}</p>
+                        <p className="text-slate-500 dark:text-slate-400">
+                          {format(parseISO(theirs.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })} · {theirs.startTime}–{theirs.endTime}
+                        </p>
+                        {theirs.branchName && <p className="text-[11px] text-indigo-500">📍 {theirs.branchName}</p>}
+                      </div>
+                      <ArrowRightLeft className="w-5 h-5 text-purple-400" />
+                      <div className="text-right">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase">{isIncoming ? 'Ty dáš' : 'Ty dostaneš'}</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200">{mine.roleNeeded}</p>
+                        <p className="text-slate-500 dark:text-slate-400">
+                          {format(parseISO(mine.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })} · {mine.startTime}–{mine.endTime}
+                        </p>
+                        {mine.branchName && <p className="text-[11px] text-indigo-500">📍 {mine.branchName}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-3 justify-end">
+                      {isIncoming ? (
+                        <>
+                          <button
+                            onClick={() => handleSwapAction(sw.id, 'reject')}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Odmítnout
+                          </button>
+                          <button
+                            onClick={() => handleSwapAction(sw.id, 'accept')}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Přijmout výměnu
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleSwapAction(sw.id, 'reject')}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 transition-colors"
+                        >
+                          <XIcon className="w-3.5 h-3.5" />
+                          Zrušit návrh
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Upcoming shifts */}
         <section>
@@ -254,17 +462,58 @@ export default function MyShiftsPage() {
 
                       <div className="flex-shrink-0 flex flex-col items-end gap-2">
                         <ShiftStatusBadge status={isConfirmed ? 'confirmed' : shift.status} />
-                        {!isConfirmed && shift.status === 'assigned' && (
+                        <div className="flex items-center gap-1.5">
+                          {!isConfirmed && shift.status === 'assigned' && (
+                            <button
+                              onClick={() => handleConfirm(shift.id)}
+                              className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50 px-2.5 py-1 rounded-lg transition-colors"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Potvrdit
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleConfirm(shift.id)}
-                            className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 px-2.5 py-1 rounded-lg transition-colors"
+                            onClick={() => openSwapDialog(shift)}
+                            title="Navrhnout výměnu s kolegou"
+                            className="flex items-center gap-1 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/50 px-2.5 py-1 rounded-lg transition-colors"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Potvrdit
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                            Vyměnit
                           </button>
-                        )}
+                          <button
+                            onClick={() => setGiveUpConfirm(shift.id)}
+                            title="Nabídnout směnu k převzetí"
+                            className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 px-2.5 py-1 rounded-lg transition-colors"
+                          >
+                            <Handshake className="w-3.5 h-3.5" />
+                            Dát pryč
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    {giveUpConfirm === shift.id && (
+                      <div className="border-t border-slate-100 dark:border-slate-800 bg-amber-50/50 dark:bg-amber-900/10 px-5 py-4">
+                        <p className="text-xs text-amber-800 dark:text-amber-300 mb-3">
+                          Opravdu chceš nabídnout tuto směnu k převzetí? Objeví se mezi volnými směnami a kdokoli z týmu si ji může vzít.
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleGiveUp(shift.id)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            <Handshake className="w-3.5 h-3.5" />
+                            Ano, nabídnout
+                          </button>
+                          <button
+                            onClick={() => setGiveUpConfirm(null)}
+                            className="px-4 py-2 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Zrušit
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -454,6 +703,115 @@ export default function MyShiftsPage() {
         </section>
 
       </div>
+
+      {/* Swap proposal modal */}
+      {swapDialog && (
+        <div className="fixed inset-0 z-50 bg-black/40 dark:bg-black/60 flex items-center justify-center p-4" onClick={() => setSwapDialog(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <ArrowRightLeft className="w-4 h-4 text-purple-500" />
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Navrhnout výměnu</h3>
+              </div>
+              <button onClick={() => setSwapDialog(null)} className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* My shift summary */}
+              <div className="bg-indigo-50/50 dark:bg-indigo-900/20 rounded-xl p-3 border border-indigo-100 dark:border-indigo-900/40">
+                <p className="text-[10px] font-semibold text-indigo-500 uppercase mb-1">Vzdáváš se</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{swapDialog.myShift.roleNeeded}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {format(parseISO(swapDialog.myShift.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })} · {swapDialog.myShift.startTime}–{swapDialog.myShift.endTime}
+                </p>
+              </div>
+
+              {/* Pick colleague */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Výměna s kým?</label>
+                <select
+                  value={swapPickedUserId}
+                  onChange={e => { setSwapPickedUserId(e.target.value); setSwapPickedShiftId('') }}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                >
+                  <option value="">— Vyber kolegu —</option>
+                  {colleagues.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Pick their shift */}
+              {swapPickedUserId && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Kterou jeho směnu bys vzal/a?</label>
+                  {colleagueShifts.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-2">Tento kolega nemá žádnou nadcházející směnu.</p>
+                  ) : (
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 border border-slate-100 dark:border-slate-800 rounded-xl p-1.5">
+                      {colleagueShifts.map(s => (
+                        <label
+                          key={s.id}
+                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                            swapPickedShiftId === s.id
+                              ? 'bg-purple-100 dark:bg-purple-900/40 border border-purple-300 dark:border-purple-700'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800 border border-transparent'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="swapShift"
+                            value={s.id}
+                            checked={swapPickedShiftId === s.id}
+                            onChange={() => setSwapPickedShiftId(s.id)}
+                            className="text-purple-600 focus:ring-purple-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.roleNeeded}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {format(parseISO(s.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })} · {s.startTime}–{s.endTime}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Zpráva (nepovinné)</label>
+                <input
+                  type="text"
+                  placeholder="např. prohodíme to? potřebuju volno…"
+                  value={swapMessage}
+                  onChange={e => setSwapMessage(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-300 dark:placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 px-5 py-3 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800">
+              <button
+                onClick={() => setSwapDialog(null)}
+                className="flex-1 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                Zrušit
+              </button>
+              <button
+                onClick={handleProposeSwap}
+                disabled={!swapPickedUserId || !swapPickedShiftId}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ArrowRightLeft className="w-4 h-4" />
+                Odeslat návrh
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -74,16 +74,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [joinCode,       setJoinCode]       = useState<string | null>(null)
 
   useEffect(() => {
-    try {
-      // Try localStorage first, then cookie fallback (iOS PWA clears localStorage)
-      let stored = localStorage.getItem(STORAGE_KEY)
-      if (!stored) stored = getCookie(COOKIE_USER_KEY)
+    async function bootstrap() {
+      try {
+        // Try localStorage first, then cookie fallback (iOS PWA clears localStorage)
+        let stored = localStorage.getItem(STORAGE_KEY)
+        if (!stored) stored = getCookie(COOKIE_USER_KEY)
 
-      if (stored) {
+        if (!stored) {
+          setLoading(false)
+          return
+        }
+
         const parsedUser = JSON.parse(stored)
         setUser(parsedUser)
-
-        // Sync both storage mechanisms
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsedUser))
         setCookie(COOKIE_USER_KEY, JSON.stringify(parsedUser))
 
@@ -101,9 +104,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCookie(COOKIE_BIZ_KEY, biz.id)
           }
         }
-      }
-    } catch {}
-    setLoading(false)
+
+        // Session validation for registered users — expired cookie? Force logout.
+        const bizId = storedBizId ?? (parsedUser as any).businessId
+        const isRegistered = typeof bizId === 'string' && bizId.startsWith('biz-reg-')
+        if (isRegistered) {
+          try {
+            const res = await fetch('/api/auth/me', { credentials: 'same-origin' })
+            if (res.ok) {
+              const data = await res.json()
+              if (!data?.user) {
+                // Cookie expired — wipe local state
+                localStorage.removeItem(STORAGE_KEY)
+                localStorage.removeItem(BIZ_STORAGE_KEY)
+                deleteCookie(COOKIE_USER_KEY)
+                deleteCookie(COOKIE_BIZ_KEY)
+                setUser(null)
+                setActiveBusiness(null)
+                setJoinCode(null)
+              }
+            }
+          } catch {
+            // Network error — leave as is (offline mode)
+          }
+        }
+      } catch {}
+      setLoading(false)
+    }
+    bootstrap()
   }, [])
 
   // ─── helpers ────────────────────────────────────────────────────────────────
@@ -145,21 +173,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: true, role: mockUser.role }
     }
 
-    // 2. Check localStorage registered users (fast, offline)
-    const regUser = getRegisteredUsers().find(u => u.email.toLowerCase() === email.toLowerCase())
-    if (regUser) {
-      storeUser(regUser)
-      const biz = getRegisteredBiz().find(b => b.id === (regUser as any).businessId)
-      if (biz) storeBiz(biz, (biz as any).joinCode)
-      return { success: true, role: regUser.role }
-    }
-
-    // 3. Check database (user registered on another device)
+    // 2. Check database — password always verified server-side
     try {
       const res = await fetch('/api/auth/login', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email, password }),
+        body:    JSON.stringify({ email, password, rememberMe }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -261,7 +280,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
     setActiveBusiness(null)
     setJoinCode(null)
+    // Clear server-side session cookie
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
   }
+
+  // Listen for runtime "session expired" events fired from any page
+  useEffect(() => {
+    function onExpired() {
+      if (user) {
+        logout()
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login?expired=1'
+        }
+      }
+    }
+    window.addEventListener('auth:expired', onExpired)
+    return () => window.removeEventListener('auth:expired', onExpired)
+  }, [user])
 
   const switchBusiness = (bizId: string) => {
     const allBiz = [...BUSINESSES, ...getRegisteredBiz()]

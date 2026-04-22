@@ -42,9 +42,14 @@ export async function getEmployeesForBusiness(bizId: string): Promise<User[]> {
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
 
-export async function getShiftsForBusiness(bizId: string): Promise<Shift[]> {
-  if (!isRegistered(bizId)) return mockShifts(bizId)
-  const res = await fetch(`/api/shifts?bizId=${bizId}`)
+export async function getShiftsForBusiness(bizId: string, branchId?: string | null): Promise<Shift[]> {
+  if (!isRegistered(bizId)) {
+    const all = mockShifts(bizId)
+    return branchId ? all.filter(s => s.branchId === branchId) : all
+  }
+  const q = new URLSearchParams({ bizId })
+  if (branchId) q.set('branchId', branchId)
+  const res = await fetch(`/api/shifts?${q}`)
   if (!res.ok) return []
   return res.json()
 }

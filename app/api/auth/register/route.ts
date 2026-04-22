@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
 import bcrypt from 'bcryptjs'
+import { setSessionCookie } from '@/lib/session'
 
 const AVATAR_COLORS = ['#6366f1','#f59e0b','#10b981','#ec4899','#3b82f6','#8b5cf6','#14b8a6','#f97316']
 const randomColor = () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
@@ -64,11 +65,19 @@ export async function POST(req: NextRequest) {
       [userId, name, email.toLowerCase(), role, color, bizId, passwordHash]
     )
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       user:     { id: userId, name, email: email.toLowerCase(), role, color, businessId: bizId },
       business: { id: bizId, name: bizName, location: bizLocation },
       joinCode: code,
     })
+    setSessionCookie(res, {
+      userId: userId,
+      bizId:  bizId,
+      role:   role as 'manager' | 'employee',
+      name:   name,
+      email:  email.toLowerCase(),
+    }, 30)
+    return res
   } finally {
     client.release()
   }

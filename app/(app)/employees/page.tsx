@@ -155,11 +155,16 @@ export default function EmployeesPage() {
   // ── Unassign employee from a shift ────────────────────────────────────────
   const handleUnassign = async (shiftId: string) => {
     if (!bizIsRegistered) return
-    await fetch('/api/shifts', {
+    const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: shiftId, assignedEmployeeId: null, status: 'open' }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při zrušení přiřazení')
+      return
+    }
     setBizShifts(prev => prev.map(s => s.id === shiftId
       ? { ...s, assignedEmployee: undefined, status: 'open' }
       : s
@@ -248,6 +253,21 @@ export default function EmployeesPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-bold text-slate-900">{emp.name}</p>
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-slate-500">Zaměstnanec</Badge>
+                      {bizIsRegistered && branches.length > 0 && (() => {
+                        const empAssignedBranches = empBranches
+                          .filter(eb => eb.userId === emp.id)
+                          .map(eb => branches.find(b => b.id === eb.branchId))
+                          .filter((b): b is NonNullable<typeof b> => !!b)
+                        if (empAssignedBranches.length === 0) {
+                          return <Badge className="text-[10px] px-1.5 py-0 bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-50">Bez pobočky</Badge>
+                        }
+                        return empAssignedBranches.map(b => (
+                          <Badge key={b.id} className="text-[10px] px-1.5 py-0 bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-50 gap-0.5">
+                            <MapPin className="w-2.5 h-2.5" />
+                            {b.name}
+                          </Badge>
+                        ))
+                      })()}
                     </div>
                     <div className="flex items-center gap-3 mt-0.5">
                       <span className="text-xs text-slate-400 flex items-center gap-1">

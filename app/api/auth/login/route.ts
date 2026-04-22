@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
 import bcrypt from 'bcryptjs'
+import { setSessionCookie } from '@/lib/session'
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json()
+  const { email, password, rememberMe } = await req.json()
 
   const client = await pool.connect()
   try {
@@ -17,12 +18,10 @@ export async function POST(req: NextRequest) {
 
     const user = userRes.rows[0]
 
-    // Verify password
     if (user.password_hash) {
       const ok = await bcrypt.compare(password ?? '', user.password_hash)
       if (!ok) return NextResponse.json({ error: 'Špatné heslo.' }, { status: 401 })
     }
-    // If no password_hash (legacy account) — allow login without password
 
     const bizRes = await client.query(
       'SELECT * FROM "Business" WHERE id = $1',
@@ -30,7 +29,7 @@ export async function POST(req: NextRequest) {
     )
     const biz = bizRes.rows[0] ?? null
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       user: {
         id:         user.id,
         name:       user.name,
@@ -42,6 +41,14 @@ export async function POST(req: NextRequest) {
       business: biz ? { id: biz.id, name: biz.name, location: biz.location } : null,
       joinCode:  biz?.join_code ?? null,
     })
+    setSessionCookie(res, {
+      userId: user.id,
+      bizId:  user.business_id,
+      role:   user.role,
+      name:   user.name,
+      email:  user.email,
+    }, rememberMe ? 30 : 1)
+    return res
   } finally {
     client.release()
   }

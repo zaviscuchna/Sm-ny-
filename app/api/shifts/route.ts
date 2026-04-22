@@ -1,13 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import { getSession } from '@/lib/session'
+import { findShiftConflict, formatConflictMessage } from '@/lib/conflicts'
+
+async function requireManager(req: NextRequest): Promise<NextResponse | null> {
+  const s = await getSession(req)
+  if (!s) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (s.role !== 'manager' && s.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  return null
+}
 
 export async function GET(req: NextRequest) {
-  const bizId = req.nextUrl.searchParams.get('bizId')
-  if (!bizId) return NextResponse.json([], { status: 400 })
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const bizId = req.nextUrl.searchParams.get('bizId') || session.bizId
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const employeeId = req.nextUrl.searchParams.get('employeeId')
   const branchId = req.nextUrl.searchParams.get('branchId')
-  const status = req.nextUrl.searchParams.get('status') // filter by status (e.g. 'completed')
+  const status = req.nextUrl.searchParams.get('status')
 
   const client = await pool.connect()
   try {
@@ -56,10 +72,57 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const mgr = await requireManager(req)
+  if (mgr) return mgr
+  const session = (await getSession(req))!
+
   const { id, groupId, assignedEmployeeId, status, roleNeeded, startTime, endTime, date, notes, branchId, actualStart, actualEnd } = await req.json()
   if (!id && !groupId) return NextResponse.json({ error: 'Missing id or groupId' }, { status: 400 })
+
   const client = await pool.connect()
   try {
+    // Ownership check + load current shift data for conflict check
+    let currentShift: { business_id: string; date: string; start_time: string; end_time: string } | null = null
+    if (id) {
+      const { rows } = await client.query('SELECT business_id, date, start_time, end_time FROM "Shift" WHERE id = $1', [id])
+      if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      if (rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      currentShift = rows[0]
+    }
+    if (groupId) {
+      const { rows } = await client.query('SELECT business_id FROM "Shift" WHERE recurring_group_id = $1 LIMIT 1', [groupId])
+      if (rows.length > 0 && rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
+    // Conflict detection — if we're assigning an employee, make sure they don't already have
+    // an overlapping shift (including in other branches). Applies only to single-shift PATCH
+    // (not groupId bulk edits).
+    if (id && currentShift && assignedEmployeeId) {
+      const newDate  = (date ?? currentShift.date) as string
+      const newStart = (startTime ?? currentShift.start_time) as string
+      const newEnd   = (endTime ?? currentShift.end_time) as string
+      const conflict = await findShiftConflict(client, {
+        employeeId: assignedEmployeeId,
+        businessId: currentShift.business_id,
+        date: newDate,
+        startTime: newStart,
+        endTime: newEnd,
+        excludeShiftId: id,
+      })
+      if (conflict) {
+        const empRes = await client.query('SELECT name FROM "User" WHERE id = $1', [assignedEmployeeId])
+        const empName = empRes.rows[0]?.name
+        return NextResponse.json({
+          error: formatConflictMessage(conflict, empName),
+          conflict,
+        }, { status: 409 })
+      }
+    }
+
     const sets: string[] = []
     const vals: any[] = []
     let idx = 1
@@ -68,7 +131,6 @@ export async function PATCH(req: NextRequest) {
     if (roleNeeded  !== undefined) { sets.push(`role_needed = $${idx++}`); vals.push(roleNeeded) }
     if (startTime   !== undefined) { sets.push(`start_time = $${idx++}`);  vals.push(startTime) }
     if (endTime     !== undefined) { sets.push(`end_time = $${idx++}`);    vals.push(endTime) }
-    // date only applies to single shift edits, not group edits
     if (date !== undefined && !groupId) { sets.push(`date = $${idx++}`); vals.push(date) }
     if (notes       !== undefined) { sets.push(`notes = $${idx++}`);       vals.push(notes) }
     if (branchId    !== undefined) { sets.push(`branch_id = $${idx++}`);   vals.push(branchId === null ? null : branchId) }
@@ -86,6 +148,10 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const mgr = await requireManager(req)
+  if (mgr) return mgr
+  const session = (await getSession(req))!
+
   const id          = req.nextUrl.searchParams.get('id')
   const groupId     = req.nextUrl.searchParams.get('groupId')
   const bizId       = req.nextUrl.searchParams.get('bizId')
@@ -96,8 +162,27 @@ export async function DELETE(req: NextRequest) {
   if (!id && !groupId && !(bizId && roleNeeded && startTime && endTime))
     return NextResponse.json({ error: 'Missing params' }, { status: 400 })
 
+  if (bizId && bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const client = await pool.connect()
   try {
+    // Ownership checks for id/groupId
+    if (id) {
+      const { rows } = await client.query('SELECT business_id FROM "Shift" WHERE id = $1', [id])
+      if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      if (rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+    if (groupId && !id) {
+      const { rows } = await client.query('SELECT business_id FROM "Shift" WHERE recurring_group_id = $1 LIMIT 1', [groupId])
+      if (rows.length > 0 && rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+    }
+
     if (bizId && roleNeeded && startTime && endTime) {
       const { rows } = await client.query(
         'SELECT id FROM "Shift" WHERE business_id = $1 AND role_needed = $2 AND start_time = $3 AND end_time = $4',
@@ -127,15 +212,55 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const mgr = await requireManager(req)
+  if (mgr) return mgr
+  const session = (await getSession(req))!
+
   const { shifts } = await req.json()
+  if (!Array.isArray(shifts)) return NextResponse.json({ error: 'Missing shifts' }, { status: 400 })
+
   const client = await pool.connect()
   try {
+    const conflicts: Array<{ date: string; startTime: string; endTime: string; empName?: string; with: string }> = []
     for (const s of shifts) {
+      const bizId = s.businessId
+      if (bizId !== session.bizId && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      if (s.assignedEmployeeId) {
+        const conflict = await findShiftConflict(client, {
+          employeeId: s.assignedEmployeeId,
+          businessId: bizId,
+          date: s.date,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          excludeShiftId: null,
+        })
+        if (conflict) {
+          const empRes = await client.query('SELECT name FROM "User" WHERE id = $1', [s.assignedEmployeeId])
+          const empName = empRes.rows[0]?.name
+          conflicts.push({
+            date: s.date,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            empName,
+            with: formatConflictMessage(conflict, empName),
+          })
+          continue
+        }
+      }
       await client.query(
         `INSERT INTO "Shift" (id, business_id, branch_id, date, start_time, end_time, role_needed, assigned_employee_id, status, notes, recurring_group_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-        [s.id, s.businessId, s.branchId ?? null, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null, s.recurringGroupId ?? null]
+        [s.id, bizId, s.branchId ?? null, s.date, s.startTime, s.endTime, s.roleNeeded, s.assignedEmployeeId ?? null, s.status, s.notes ?? null, s.recurringGroupId ?? null]
       )
+    }
+    if (conflicts.length > 0) {
+      return NextResponse.json({
+        ok: true,
+        conflicts,
+        warning: `${conflicts.length} směn nebylo vytvořeno kvůli kolizím — zaměstnanec má v tom čase jinou směnu.`,
+      }, { status: 207 })
     }
     return NextResponse.json({ ok: true })
   } finally {

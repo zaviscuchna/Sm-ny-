@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
-import { format } from 'date-fns'
+import { getSession } from '@/lib/session'
+import { todayPrague, nowTimePrague } from '@/lib/tz'
 
 function calcHours(clockIn: string, clockOut: string): number {
   const [ih, im] = clockIn.split(':').map(Number)
@@ -8,14 +9,21 @@ function calcHours(clockIn: string, clockOut: string): number {
   return Math.round(((oh + om / 60) - (ih + im / 60)) * 10) / 10
 }
 
-// GET — check current status for employee (clocked in or not)
 export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl
-  const bizId      = searchParams.get('bizId')
-  const employeeId = searchParams.get('employeeId')
-  if (!bizId || !employeeId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const today  = format(new Date(), 'yyyy-MM-dd')
+  const { searchParams } = req.nextUrl
+  const bizId      = searchParams.get('bizId') || session.bizId
+  const employeeId = searchParams.get('employeeId') || session.userId
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (session.role === 'employee' && employeeId !== session.userId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const today  = todayPrague()
   const client = await pool.connect()
   try {
     const res = await client.query(
@@ -33,16 +41,23 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST — clock in or out
 export async function POST(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { token, bizId, employeeId, employeeName } = await req.json()
   if (!token || !bizId || !employeeId || !employeeName) {
     return NextResponse.json({ error: 'Chybí parametry' }, { status: 400 })
   }
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (session.role === 'employee' && employeeId !== session.userId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const client = await pool.connect()
   try {
-    // Validate token
     const tokenRes = await client.query(
       `SELECT id FROM "QrToken" WHERE business_id = $1 AND token = $2 AND expires_at > NOW()`,
       [bizId, token]
@@ -51,10 +66,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'QR kód vypršel nebo je neplatný. Načti nový.' }, { status: 400 })
     }
 
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const now   = format(new Date(), 'HH:mm')
+    const today = todayPrague()
+    const now   = nowTimePrague()
 
-    // Check if already clocked in
     const openSession = await client.query(
       `SELECT * FROM "ClockSession"
        WHERE business_id = $1 AND employee_id = $2 AND date = $3 AND clock_out IS NULL`,
@@ -62,7 +76,6 @@ export async function POST(req: NextRequest) {
     )
 
     if (openSession.rows.length === 0) {
-      // CLOCK IN
       const id = `cs-${Date.now()}`
       await client.query(
         `INSERT INTO "ClockSession" (id, business_id, employee_id, employee_name, date, clock_in)
@@ -71,20 +84,18 @@ export async function POST(req: NextRequest) {
       )
       return NextResponse.json({ action: 'clock_in', time: now })
     } else {
-      // CLOCK OUT
-      const session  = openSession.rows[0]
-      const hours    = calcHours(session.clock_in, now)
+      const csRow  = openSession.rows[0]
+      const hours  = calcHours(csRow.clock_in, now)
       await client.query(
         `UPDATE "ClockSession" SET clock_out = $1, hours = $2 WHERE id = $3`,
-        [now, hours, session.id]
+        [now, hours, csRow.id]
       )
-      // Also write to WorkLog for history
       const wlId = `wl-qr-${Date.now()}`
       await client.query(
         `INSERT INTO "WorkLog" (id, employee_id, employee_name, business_id, date, clock_in, clock_out, hours, notes)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
          ON CONFLICT (id) DO NOTHING`,
-        [wlId, employeeId, employeeName, bizId, today, session.clock_in, now, hours, 'QR docházka']
+        [wlId, employeeId, employeeName, bizId, today, csRow.clock_in, now, hours, 'QR docházka']
       )
       return NextResponse.json({ action: 'clock_out', time: now, hours })
     }

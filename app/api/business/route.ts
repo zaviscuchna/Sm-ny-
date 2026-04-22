@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import { getSession } from '@/lib/session'
 
 export async function GET(req: NextRequest) {
-  const bizId = req.nextUrl.searchParams.get('bizId')
-  if (!bizId) return NextResponse.json({ error: 'Missing bizId' }, { status: 400 })
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const bizId = req.nextUrl.searchParams.get('bizId') || session.bizId
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const client = await pool.connect()
   try {
@@ -17,9 +23,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'manager' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { bizId, positions } = await req.json()
   if (!bizId || !Array.isArray(positions)) {
     return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
+  }
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const client = await pool.connect()

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import { getSession } from '@/lib/session'
 
 function calcHours(clockIn: string, clockOut: string): number {
   const [ih, im] = clockIn.split(':').map(Number)
@@ -8,20 +9,31 @@ function calcHours(clockIn: string, clockOut: string): number {
 }
 
 export async function GET(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = req.nextUrl
-  const bizId      = searchParams.get('bizId')
+  const bizId      = searchParams.get('bizId') || session.bizId
   const employeeId = searchParams.get('employeeId')
   const month      = searchParams.get('month')
 
-  if (!bizId) return NextResponse.json([], { status: 400 })
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  // Employees may only see their own logs
+  if (session.role === 'employee' && employeeId && employeeId !== session.userId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  // Employees without employeeId set default to themselves
+  const effectiveEmployeeId = session.role === 'employee' ? session.userId : employeeId
 
   const client = await pool.connect()
   try {
     let res
-    if (employeeId) {
+    if (effectiveEmployeeId) {
       res = await client.query(
         'SELECT * FROM "WorkLog" WHERE employee_id = $1 AND business_id = $2 ORDER BY date DESC',
-        [employeeId, bizId]
+        [effectiveEmployeeId, bizId]
       )
     } else if (month) {
       const [y, m] = month.split('-').map(Number)
@@ -40,7 +52,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { log, bizId } = await req.json()
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  // Employee can only log themselves
+  if (session.role === 'employee' && log.employeeId !== session.userId) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const id    = `wl-${Date.now()}`
   const hours = calcHours(log.clockIn, log.clockOut)
 
@@ -58,10 +81,22 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'manager' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ ok: false }, { status: 400 })
+
   const client = await pool.connect()
   try {
+    const { rows } = await client.query('SELECT business_id FROM "WorkLog" WHERE id = $1', [id])
+    if (rows.length === 0) return NextResponse.json({ ok: true })
+    if (rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     await client.query('DELETE FROM "WorkLog" WHERE id = $1', [id])
     return NextResponse.json({ ok: true })
   } finally {

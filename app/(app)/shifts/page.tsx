@@ -4,13 +4,14 @@ import { useState, useMemo, useEffect } from 'react'
 import { format, addDays, startOfWeek } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBranch } from '@/contexts/BranchContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { NewShiftDialog } from '@/components/shifts/NewShiftDialog'
 import { getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
 import type { Shift, User } from '@/types'
-import { ChevronLeft, ChevronRight, Clock, User as UserIcon, Plus, Trash2, UserCheck, Pencil, Check, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock, User as UserIcon, Plus, Trash2, UserCheck, Pencil, Check, X, Split } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { isRegistered } from '@/lib/db'
@@ -33,6 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function ShiftsPage() {
   const { user, activeBusiness } = useAuth()
+  const { activeBranch } = useBranch()
   const [weekOffset, setWeekOffset]       = useState(0)
   const [dbShifts,   setDbShifts]         = useState<Shift[]>([])
   const [extraShifts, setExtraShifts]     = useState<Shift[]>([])
@@ -41,24 +43,23 @@ export default function ShiftsPage() {
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const [selectedDateStr, setSelectedDateStr] = useState(todayStr)
 
-  // Load shifts + employees whenever the active business changes
+  // Load shifts + employees whenever the active business or branch changes
   useEffect(() => {
     if (!activeBusiness) return
     setLoadingShifts(true)
     setExtraShifts([])
     Promise.all([
-      getShiftsForBusiness(activeBusiness.id),
+      getShiftsForBusiness(activeBusiness.id, activeBranch?.id),
       getEmployeesForBusiness(activeBusiness.id),
     ]).then(([shifts, emps]) => {
       setDbShifts(shifts)
-      // Include manager in assignable list so they can assign themselves
       if (user && user.role === 'manager' && !emps.find(e => e.id === user.id)) {
         setEmployees([{ id: user.id, name: user.name, email: user.email, role: user.role, color: user.color }, ...emps])
       } else {
         setEmployees(emps)
       }
     }).finally(() => setLoadingShifts(false))
-  }, [activeBusiness?.id])
+  }, [activeBusiness?.id, activeBranch?.id])
 
   const weekStart = useMemo(() => {
     const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
@@ -86,7 +87,7 @@ export default function ShiftsPage() {
 
   const handleAssignEmployee = async (shiftId: string, employee: User | null) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
-    await fetch('/api/shifts', {
+    const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -95,6 +96,12 @@ export default function ShiftsPage() {
         status: employee ? 'assigned' : 'open',
       }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      if (res.status === 409) toast.error(data.error ?? 'Zaměstnanec má kolidující směnu')
+      else toast.error(data.error ?? 'Chyba při přiřazení')
+      return
+    }
     const update = (s: Shift) => s.id === shiftId
       ? { ...s, assignedEmployee: employee ?? undefined, status: (employee ? 'assigned' : 'open') as Shift['status'] }
       : s
@@ -105,11 +112,16 @@ export default function ShiftsPage() {
 
   const handleEditShift = async (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'>>) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
-    await fetch('/api/shifts', {
+    const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: shiftId, ...fields }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při úpravě směny')
+      return
+    }
     const update = (s: Shift) => s.id === shiftId ? { ...s, ...fields } : s
     setDbShifts(prev => prev.map(update))
     setExtraShifts(prev => prev.map(update))
@@ -118,7 +130,12 @@ export default function ShiftsPage() {
 
   const handleDeleteShift = async (shiftId: string) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
-    await fetch(`/api/shifts?id=${shiftId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/shifts?id=${shiftId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při mazání směny')
+      return
+    }
     setDbShifts(prev => prev.filter(s => s.id !== shiftId))
     setExtraShifts(prev => prev.filter(s => s.id !== shiftId))
     toast.success('Směna smazána')
@@ -126,7 +143,12 @@ export default function ShiftsPage() {
 
   const handleDeleteSeries = async (groupId: string) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
-    await fetch(`/api/shifts?groupId=${groupId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/shifts?groupId=${groupId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při mazání série')
+      return
+    }
     setDbShifts(prev => prev.filter(s => s.recurringGroupId !== groupId))
     setExtraShifts(prev => prev.filter(s => s.recurringGroupId !== groupId))
     toast.success('Celá série smazána')
@@ -134,11 +156,16 @@ export default function ShiftsPage() {
 
   const handleEditSeries = async (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
-    await fetch('/api/shifts', {
+    const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ groupId, ...fields }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při úpravě série')
+      return
+    }
     const update = (s: Shift) => s.recurringGroupId === groupId ? { ...s, ...fields } : s
     setDbShifts(prev => prev.map(update))
     setExtraShifts(prev => prev.map(update))
@@ -160,10 +187,40 @@ export default function ShiftsPage() {
     }, {})
   }, [allShifts])
 
+  const handleSplitShift = async (shiftId: string, splitTime: string) => {
+    if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    const res = await fetch('/api/shifts/split', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shiftId, splitTime }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? 'Chyba při rozdělení směny')
+      return
+    }
+    // Shorten original shift
+    const shorten = (s: Shift) => s.id === shiftId
+      ? { ...s, endTime: splitTime, recurringGroupId: undefined }
+      : s
+    setDbShifts(prev => prev.map(shorten))
+    setExtraShifts(prev => prev.map(shorten))
+    // Add new open half
+    if (data.newShift) {
+      setExtraShifts(prev => [...prev, data.newShift as Shift])
+    }
+    toast.success(`Směna rozdělena. Druhá půlka (${splitTime}–${data.newShift?.endTime}) je nyní volná.`)
+  }
+
   const handleDeleteSimilar = async (shift: Shift) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
     const params = new URLSearchParams({ bizId: shift.businessId, roleNeeded: shift.roleNeeded, startTime: shift.startTime, endTime: shift.endTime })
-    await fetch(`/api/shifts?${params}`, { method: 'DELETE' })
+    const res = await fetch(`/api/shifts?${params}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při mazání')
+      return
+    }
     const sameKey = (s: Shift) => s.businessId === shift.businessId && s.roleNeeded === shift.roleNeeded && s.startTime === shift.startTime && s.endTime === shift.endTime
     setDbShifts(prev => prev.filter(s => !sameKey(s)))
     setExtraShifts(prev => prev.filter(s => !sameKey(s)))
@@ -262,6 +319,7 @@ export default function ShiftsPage() {
               {selectedDayShifts.map(shift => (
                 <MobileShiftCard key={shift.id} shift={shift} employees={employees}
                   onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
+                  onSplit={handleSplitShift}
                   onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
                   seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined}
                   similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
@@ -315,6 +373,7 @@ export default function ShiftsPage() {
                       {dayShifts.map(shift => (
                     <DesktopShiftCard key={shift.id} shift={shift} employees={employees}
                       onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
+                      onSplit={handleSplitShift}
                       onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
                       seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined}
                       similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
@@ -347,6 +406,7 @@ interface CardProps {
   onAssign: (shiftId: string, employee: User | null) => void
   onDelete: (shiftId: string) => void
   onEdit:   (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'>>) => void
+  onSplit:  (shiftId: string, splitTime: string) => void
   onDeleteSeries?: (groupId: string) => void
   onEditSeries?:   (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => void
   seriesCount?: number
@@ -354,16 +414,27 @@ interface CardProps {
   onDeleteSimilar?: () => void
 }
 
+// Midpoint time helper — vrátí střed mezi start a end ve formátu HH:MM
+function midpointTime(start: string, end: string): string {
+  const [sh, sm] = start.split(':').map(Number)
+  const [eh, em] = end.split(':').map(Number)
+  const startMin = sh * 60 + sm
+  const endMin = eh * 60 + em
+  const mid = Math.round((startMin + endMin) / 2 / 15) * 15
+  return `${String(Math.floor(mid / 60)).padStart(2, '0')}:${String(mid % 60).padStart(2, '0')}`
+}
+
 // ── Mobile shift card ────────────────────────────────────────────────────────
 
-function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
-  const [mode, setMode] = useState<'view'|'assign'|'edit'>('view')
+function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+  const [mode, setMode] = useState<'view'|'assign'|'edit'|'split'>('view')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
   const [editRole,  setEditRole]  = useState(shift.roleNeeded)
   const [editStart, setEditStart] = useState(shift.startTime)
   const [editEnd,   setEditEnd]   = useState(shift.endTime)
   const [editNotes, setEditNotes] = useState(shift.notes ?? '')
+  const [splitTime, setSplitTime] = useState(() => midpointTime(shift.startTime, shift.endTime))
   const accent: Record<string, string> = {
     confirmed: 'border-l-green-400', assigned: 'border-l-blue-400',
     pending: 'border-l-amber-400',   open: 'border-l-red-400',
@@ -446,6 +517,11 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
                   className={`p-1.5 rounded-lg transition-colors ${mode === 'assign' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
                   <UserCheck className="w-3.5 h-3.5" />
                 </button>
+                <button onClick={() => { setSplitTime(midpointTime(shift.startTime, shift.endTime)); setMode('split') }}
+                  title="Rozdělit směnu"
+                  className="p-1.5 rounded-lg text-slate-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+                  <Split className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={() => { setEditRole(shift.roleNeeded); setEditStart(shift.startTime); setEditEnd(shift.endTime); setEditNotes(shift.notes ?? ''); setMode('edit') }}
                   title="Upravit směnu" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
@@ -485,6 +561,35 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
             </div>
           </div>
           {shift.notes && <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 pt-2 border-t border-slate-50 dark:border-slate-800">{shift.notes}</p>}
+          {mode === 'split' && (
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-2">Rozdělit směnu na dvě</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-2">
+                První část ({shift.startTime}–{splitTime}) zůstane {shift.assignedEmployee ? shift.assignedEmployee.name.split(' ')[0] : 'otevřená'},
+                druhá ({splitTime}–{shift.endTime}) se stane volnou směnou.
+              </p>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="time"
+                  value={splitTime}
+                  onChange={e => setSplitTime(e.target.value)}
+                  min={shift.startTime}
+                  max={shift.endTime}
+                  className="flex-1 text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                />
+                <button
+                  onClick={() => { if (splitTime > shift.startTime && splitTime < shift.endTime) { onSplit(shift.id, splitTime); setMode('view') } }}
+                  disabled={!(splitTime > shift.startTime && splitTime < shift.endTime)}
+                  className="px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Rozdělit
+                </button>
+                <button onClick={() => setMode('view')} className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  Zrušit
+                </button>
+              </div>
+            </div>
+          )}
           {mode === 'assign' && (
             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
               <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-2">Přiřadit zaměstnance:</p>
@@ -513,10 +618,12 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDelet
 
 // ── Desktop shift card ────────────────────────────────────────────────────────
 
-function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
   const [showAssign, setShowAssign] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
+  const [showSplit, setShowSplit] = useState(false)
+  const [splitTime, setSplitTime] = useState(() => midpointTime(shift.startTime, shift.endTime))
   const [editRole,  setEditRole]  = useState(shift.roleNeeded)
   const [editStart, setEditStart] = useState(shift.startTime)
   const [editEnd,   setEditEnd]   = useState(shift.endTime)
@@ -527,7 +634,11 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
     setEditRole(shift.roleNeeded); setEditStart(shift.startTime)
     setEditEnd(shift.endTime); setEditNotes(shift.notes ?? '')
     setEditSeries(false); setShowEditForm(true)
-    setDeleteConfirm(false); setShowAssign(false)
+    setDeleteConfirm(false); setShowAssign(false); setShowSplit(false)
+  }
+  const openSplit = () => {
+    setSplitTime(midpointTime(shift.startTime, shift.endTime))
+    setShowSplit(true); setShowAssign(false); setShowEditForm(false); setDeleteConfirm(false)
   }
   const saveEdit = () => {
     const fields = { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined }
@@ -562,15 +673,19 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
       <div className="mt-1.5 flex items-center justify-between">
         <ShiftStatusBadge status={shift.status} />
         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditForm(false) }} title="Přiřadit"
+          <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditForm(false); setShowSplit(false) }} title="Přiřadit"
             className="p-1 rounded text-slate-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
             <UserCheck className="w-3 h-3" />
+          </button>
+          <button onClick={openSplit} title="Rozdělit"
+            className="p-1 rounded text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+            <Split className="w-3 h-3" />
           </button>
           <button onClick={openEdit} title="Upravit"
             className="p-1 rounded text-slate-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
             <Pencil className="w-3 h-3" />
           </button>
-          <button onClick={() => { setDeleteConfirm(v => !v); setShowAssign(false); setShowEditForm(false) }} title="Smazat"
+          <button onClick={() => { setDeleteConfirm(v => !v); setShowAssign(false); setShowEditForm(false); setShowSplit(false) }} title="Smazat"
             className="p-1 rounded text-slate-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 dark:hover:text-red-400 transition-colors">
             <Trash2 className="w-3 h-3" />
           </button>
@@ -595,6 +710,36 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onDele
                 <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{emp.name.split(' ')[0]}</span>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+      {showSplit && (
+        <div className="absolute top-full left-0 z-20 mt-1 w-64 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3 space-y-2">
+          <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Rozdělit směnu</p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+            První část {shift.startTime}–{splitTime} → {shift.assignedEmployee?.name.split(' ')[0] ?? 'volná'}<br />
+            Druhá část {splitTime}–{shift.endTime} → volná směna
+          </p>
+          <input
+            type="time"
+            value={splitTime}
+            onChange={e => setSplitTime(e.target.value)}
+            min={shift.startTime}
+            max={shift.endTime}
+            className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-300"
+          />
+          <div className="flex gap-1.5">
+            <button
+              onClick={() => { if (splitTime > shift.startTime && splitTime < shift.endTime) { onSplit(shift.id, splitTime); setShowSplit(false) } }}
+              disabled={!(splitTime > shift.startTime && splitTime < shift.endTime)}
+              className="flex-1 flex items-center justify-center gap-1 bg-purple-600 text-white text-[11px] font-semibold rounded-lg py-1.5 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Split className="w-3 h-3" /> Rozdělit
+            </button>
+            <button onClick={() => setShowSplit(false)}
+              className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <X className="w-3 h-3" />
+            </button>
           </div>
         </div>
       )}

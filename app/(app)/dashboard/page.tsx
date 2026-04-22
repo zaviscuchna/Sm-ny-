@@ -11,8 +11,9 @@ import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { WelcomeModal } from '@/components/shared/WelcomeModal'
 import { SHIFTS, EMPLOYEES, SHIFT_APPLICATIONS, getDayCoverage } from '@/lib/mock-data'
 import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
-import type { Shift, User } from '@/types'
-import { CalendarDays, Users, AlertTriangle, Clock, CheckCircle2, XCircle, ChevronRight, Plus, UserPlus, X } from 'lucide-react'
+import { useBranch } from '@/contexts/BranchContext'
+import type { Shift, User, Branch } from '@/types'
+import { CalendarDays, Users, AlertTriangle, Clock, CheckCircle2, XCircle, ChevronRight, Plus, UserPlus, X, MapPin, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
@@ -40,11 +41,13 @@ interface FlatApp {
 
 export default function DashboardPage() {
   const { user, activeBusiness } = useAuth()
+  const { activeBranch, branches } = useBranch()
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const bizIsRegistered = isRegistered(activeBusiness?.id ?? '')
 
   // ── Real data state ───────────────────────────────────────────────────────
   const [realShifts,    setRealShifts]    = useState<Shift[]>([])
+  const [allBranchShifts, setAllBranchShifts] = useState<Shift[]>([])
   const [realEmployees, setRealEmployees] = useState<User[]>([])
   const [realApps,      setRealApps]      = useState<FlatApp[]>([])
   const [loading,       setLoading]       = useState(false)
@@ -54,15 +57,17 @@ export default function DashboardPage() {
     if (!bizIsRegistered) return
     setLoading(true)
     Promise.all([
-      getShiftsForBusiness(activeBusiness.id),
+      getShiftsForBusiness(activeBusiness.id, activeBranch?.id),
+      activeBranch ? getShiftsForBusiness(activeBusiness.id) : Promise.resolve([] as Shift[]),
       getEmployeesForBusiness(activeBusiness.id),
       fetch(`/api/shift-applications?bizId=${activeBusiness.id}`).then(r => r.json()).catch(() => []),
-    ]).then(([shifts, emps, apps]) => {
+    ]).then(([shifts, allShifts, emps, apps]) => {
       setRealShifts(shifts)
+      setAllBranchShifts(activeBranch ? allShifts : shifts)
       setRealEmployees(emps)
       setRealApps((apps as FlatApp[]).filter(a => a.status === 'pending'))
     }).finally(() => setLoading(false))
-  }, [activeBusiness?.id])
+  }, [activeBusiness?.id, activeBranch?.id])
 
   // ── Source data (real vs mock) ────────────────────────────────────────────
   const shifts    = bizIsRegistered ? realShifts    : SHIFTS
@@ -349,6 +354,108 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Branch coverage — Kdo je kde dnes */}
+        {bizIsRegistered && branches.length > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-50 dark:border-slate-800">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Kdo je kde dnes</h2>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Pokrytí všech poboček · {format(new Date(), 'd. M. yyyy', { locale: cs })}</p>
+              </div>
+              <Building2 className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+            </div>
+            <div className="divide-y divide-slate-50 dark:divide-slate-800">
+              {branches.map(branch => {
+                const todayAtBranch = allBranchShifts.filter(s => s.branchId === branch.id && s.date === todayStr)
+                const assignedCount = todayAtBranch.filter(s => s.assignedEmployee).length
+                const openCount = todayAtBranch.filter(s => s.status === 'open').length
+                return (
+                  <div key={branch.id} className="px-6 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">{branch.name}</p>
+                        {branch.address && <span className="text-xs text-slate-400 dark:text-slate-500 truncate">· {branch.address}</span>}
+                      </div>
+                      <div className="flex items-center gap-2 text-[11px]">
+                        {openCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold">
+                            {openCount}× volná
+                          </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                          todayAtBranch.length === 0
+                            ? 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500'
+                            : openCount === 0
+                              ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                              : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                        }`}>
+                          {todayAtBranch.length === 0 ? 'bez směn' : `${assignedCount}/${todayAtBranch.length} pokryto`}
+                        </span>
+                      </div>
+                    </div>
+                    {todayAtBranch.length === 0 ? (
+                      <p className="text-xs text-slate-400 dark:text-slate-500 pl-5">Dnes žádná směna na této pobočce.</p>
+                    ) : (
+                      <div className="space-y-1.5 pl-5">
+                        {todayAtBranch
+                          .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                          .map(shift => (
+                            <div key={shift.id} className="flex items-center gap-2.5">
+                              {shift.assignedEmployee ? (
+                                <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-red-50 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                                  <Users className="w-3 h-3 text-red-400" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0 flex items-baseline gap-2">
+                                <span className={`text-xs font-semibold truncate ${
+                                  shift.assignedEmployee ? 'text-slate-700 dark:text-slate-300' : 'text-red-500 dark:text-red-400'
+                                }`}>
+                                  {shift.assignedEmployee?.name ?? 'Volná pozice'}
+                                </span>
+                                <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+                                  {shift.roleNeeded} · {shift.startTime}–{shift.endTime}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {/* Shifts without branch */}
+              {(() => {
+                const unassigned = allBranchShifts.filter(s => !s.branchId && s.date === todayStr)
+                if (unassigned.length === 0) return null
+                return (
+                  <div className="px-6 py-4 bg-slate-50/30 dark:bg-slate-800/30">
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">Bez přiřazené pobočky</p>
+                    <div className="space-y-1.5">
+                      {unassigned.map(shift => (
+                        <div key={shift.id} className="flex items-center gap-2.5 text-xs">
+                          {shift.assignedEmployee ? (
+                            <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                              <Users className="w-3 h-3 text-slate-400" />
+                            </div>
+                          )}
+                          <span className="text-slate-600 dark:text-slate-400">
+                            {shift.assignedEmployee?.name ?? 'Volná pozice'} · {shift.roleNeeded} · {shift.startTime}–{shift.endTime}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Employee overview */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden">

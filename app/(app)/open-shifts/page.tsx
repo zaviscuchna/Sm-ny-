@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBranch } from '@/contexts/BranchContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { SHIFTS, SHIFT_APPLICATIONS } from '@/lib/mock-data'
@@ -23,6 +24,7 @@ function getDuration(start: string, end: string) {
 
 export default function OpenShiftsPage() {
   const { user, activeBusiness } = useAuth()
+  const { activeBranch } = useBranch()
   const isManager = user?.role === 'manager'
 
   const [openShifts, setOpenShifts] = useState<Shift[]>([])
@@ -32,7 +34,9 @@ export default function OpenShiftsPage() {
   useEffect(() => {
     if (!activeBusiness) return
     if (isRegistered(activeBusiness.id)) {
-      fetch(`/api/shifts?bizId=${activeBusiness.id}`)
+      const q = new URLSearchParams({ bizId: activeBusiness.id })
+      if (activeBranch?.id) q.set('branchId', activeBranch.id)
+      fetch(`/api/shifts?${q}`)
         .then(r => r.json())
         .then((shifts: Shift[]) => {
           const open = shifts.filter(s => s.status === 'open')
@@ -61,7 +65,7 @@ export default function OpenShiftsPage() {
       setOpenShifts(SHIFTS.filter(s => s.status === 'open'))
       setApps(SHIFT_APPLICATIONS)
     }
-  }, [activeBusiness?.id, user?.id])
+  }, [activeBusiness?.id, activeBranch?.id, user?.id])
   const [expandedShift, setExpandedShift] = useState<string | null>(null)
   const [appliedGroups, setAppliedGroups] = useState<Set<string>>(new Set())
   const [editingShift, setEditingShift] = useState<string | null>(null)
@@ -105,12 +109,19 @@ export default function OpenShiftsPage() {
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? 'Chyba'); return }
       setAppliedGroups(prev => new Set(prev).add(shift.recurringGroupId!))
-      // Remove assigned shifts from open list
-      setOpenShifts(prev => prev.filter(s => s.recurringGroupId !== shift.recurringGroupId))
+      // Remove only the assigned shifts (not skipped due to conflict)
+      const assignedIds = new Set<string>(data.shiftIds ?? [])
+      setOpenShifts(prev => prev.filter(s => !assignedIds.has(s.id)))
       const newApplied = new Set(appliedShifts)
-      openShifts.filter(s => s.recurringGroupId === shift.recurringGroupId).forEach(s => newApplied.add(s.id))
+      assignedIds.forEach(id => newApplied.add(id))
       setAppliedShifts(newApplied)
-      toast.success(`${data.count} směn přiřazeno! Uvidíš je v Moje směny.`)
+      if (data.count === 0) {
+        toast.error('Žádná směna nebyla přiřazena — všechny kolidují s tvými existujícími směnami.')
+      } else if (data.skipped && data.skipped.length > 0) {
+        toast.success(`${data.count} směn přiřazeno. ${data.skipped.length} přeskočeno kvůli kolizím.`)
+      } else {
+        toast.success(`${data.count} směn přiřazeno! Uvidíš je v Moje směny.`)
+      }
     } catch { toast.error('Chyba připojení') }
   }
 

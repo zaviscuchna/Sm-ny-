@@ -4,11 +4,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { format, addDays, startOfWeek } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { useAuth } from '@/contexts/AuthContext'
+import { useBranch } from '@/contexts/BranchContext'
 import { TopBar } from '@/components/layout/TopBar'
 import { NewShiftDialog } from '@/components/shifts/NewShiftDialog'
 import { getShiftsForBusiness, getEmployeesForBusiness, isRegistered } from '@/lib/db'
 import type { Shift, User } from '@/types'
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Users, User as UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
@@ -68,11 +69,22 @@ interface GhostInfo {
 
 export default function CalendarPage() {
   const { user, activeBusiness } = useAuth()
+  const { activeBranch } = useBranch()
   const isManager = user?.role === 'manager' || user?.role === 'superadmin'
 
   const [weekOffset, setWeekOffset] = useState(0)
   const [shifts,     setShifts]     = useState<Shift[]>([])
   const [employees,  setEmployees]  = useState<User[]>([])
+  const [showTeam,   setShowTeam]   = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('smenky_cal_showteam') === '1'
+  })
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smenky_cal_showteam', showTeam ? '1' : '0')
+    }
+  }, [showTeam])
   const [dragging,   setDragging]   = useState<DragState | null>(null)
   const [mousePos,   setMousePos]   = useState<{ x: number; y: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -101,29 +113,42 @@ export default function CalendarPage() {
   useEffect(() => {
     if (!activeBusiness) return
     Promise.all([
-      getShiftsForBusiness(activeBusiness.id),
-      isManager ? getEmployeesForBusiness(activeBusiness.id) : Promise.resolve([]),
+      getShiftsForBusiness(activeBusiness.id, activeBranch?.id),
+      getEmployeesForBusiness(activeBusiness.id),
     ]).then(([s, e]) => {
-      setShifts(user?.role === 'employee'
-        ? s.filter(sh => sh.assignedEmployee?.id === user.id)
-        : s)
+      setShifts(s)
       setEmployees(e)
     })
-  }, [activeBusiness?.id])
+  }, [activeBusiness?.id, activeBranch?.id])
+
+  // For employees, filter to own shifts unless team view is on
+  const visibleShifts = useMemo(() => {
+    if (user?.role === 'employee' && !showTeam) {
+      return shifts.filter(sh => sh.assignedEmployee?.id === user.id)
+    }
+    return shifts
+  }, [shifts, user?.id, user?.role, showTeam])
 
   const updateShift = useCallback(async (
     shiftId: string,
     fields: { date?: string; startTime?: string; endTime?: string },
   ) => {
+    const prevShifts = shifts
     setShifts(prev => prev.map(s => s.id === shiftId ? { ...s, ...fields } : s))
     if (activeBusiness && isRegistered(activeBusiness.id)) {
-      await fetch('/api/shifts', {
+      const res = await fetch('/api/shifts', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: shiftId, ...fields }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (res.status === 409) toast.error(data.error ?? 'Přesun by způsobil kolizi směn — zrušeno')
+        else toast.error(data.error ?? 'Chyba při úpravě směny')
+        setShifts(prevShifts)
+      }
     }
-  }, [activeBusiness])
+  }, [activeBusiness, shifts])
 
   const ghost = useMemo((): GhostInfo | null => {
     if (!dragging || !mousePos || !gridRef.current) return null
@@ -184,8 +209,8 @@ export default function CalendarPage() {
 
   const hours      = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i)
   const weekShifts = useMemo(() =>
-    shifts.filter(s => weekDays.some(d => d.dateStr === s.date)),
-  [shifts, weekDays])
+    visibleShifts.filter(s => weekDays.some(d => d.dateStr === s.date)),
+  [visibleShifts, weekDays])
 
   return (
     <div className="flex flex-col min-h-full">
@@ -211,12 +236,28 @@ export default function CalendarPage() {
             </Button>
           )}
         </div>
-        {isManager && (
-          <NewShiftDialog
-            employees={employees}
-            onShiftsCreated={ns => setShifts(prev => [...prev, ...ns])}
-          />
-        )}
+        <div className="flex items-center gap-2">
+          {user?.role === 'employee' && (
+            <button
+              onClick={() => setShowTeam(v => !v)}
+              className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-colors ${
+                showTeam
+                  ? 'bg-indigo-600 text-white'
+                  : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+              title={showTeam ? 'Zobrazit jen moje směny' : 'Zobrazit celý tým'}
+            >
+              {showTeam ? <Users className="w-3.5 h-3.5" /> : <UserIcon className="w-3.5 h-3.5" />}
+              {showTeam ? 'Tým' : 'Jen já'}
+            </button>
+          )}
+          {isManager && (
+            <NewShiftDialog
+              employees={employees}
+              onShiftsCreated={ns => setShifts(prev => [...prev, ...ns])}
+            />
+          )}
+        </div>
       </div>
 
       <div className="flex-1 px-4 md:px-8 pb-8 overflow-auto">

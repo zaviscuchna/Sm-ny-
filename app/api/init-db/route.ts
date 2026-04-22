@@ -136,6 +136,25 @@ export async function GET(req: NextRequest) {
     await client.query(`ALTER TABLE "Shift" ADD COLUMN IF NOT EXISTS "actual_end" TEXT`)
     await client.query(`CREATE INDEX IF NOT EXISTS "Shift_branch_id_idx" ON "Shift"("branch_id")`)
 
+    // ── ShiftSwap (návrhy výměn směn mezi zaměstnanci) ──────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "ShiftSwap" (
+        "id"            TEXT NOT NULL PRIMARY KEY,
+        "business_id"   TEXT NOT NULL,
+        "from_user_id"  TEXT NOT NULL,
+        "from_shift_id" TEXT NOT NULL,
+        "to_user_id"    TEXT NOT NULL,
+        "to_shift_id"   TEXT NOT NULL,
+        "status"        TEXT NOT NULL DEFAULT 'pending',
+        "message"       TEXT,
+        "created_at"    TIMESTAMPTZ DEFAULT NOW(),
+        "resolved_at"   TIMESTAMPTZ
+      )
+    `)
+    await client.query(`CREATE INDEX IF NOT EXISTS "ShiftSwap_to_user_idx" ON "ShiftSwap"("to_user_id", "status")`)
+    await client.query(`CREATE INDEX IF NOT EXISTS "ShiftSwap_from_user_idx" ON "ShiftSwap"("from_user_id", "status")`)
+    await client.query(`CREATE INDEX IF NOT EXISTS "ShiftSwap_biz_idx" ON "ShiftSwap"("business_id")`)
+
     // Ensure demo businesses exist in DB (so join codes 111111/222222/333333 work)
     const demoBiz = [
       { id: 'biz-1', name: 'Kavárna Aroma', location: 'Praha', code: '111111' },

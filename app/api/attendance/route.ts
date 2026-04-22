@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
-import { format } from 'date-fns'
+import { getSession } from '@/lib/session'
+import { todayPrague } from '@/lib/tz'
 
 export async function GET(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { searchParams } = req.nextUrl
-  const bizId = searchParams.get('bizId')
-  const date  = searchParams.get('date') ?? format(new Date(), 'yyyy-MM-dd')
-  if (!bizId) return NextResponse.json([], { status: 400 })
+  const bizId = searchParams.get('bizId') || session.bizId
+  const date  = searchParams.get('date') ?? todayPrague()
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const client = await pool.connect()
   try {

@@ -1,18 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { pool } from '@/lib/postgres'
+import { getSession } from '@/lib/session'
 
-// GET /api/employee-branches?branchId=xxx — employees in a branch
-// GET /api/employee-branches?userId=xxx — branches for an employee
-// GET /api/employee-branches?bizId=xxx — all employee-branch mappings for a business
+async function branchBelongs(bizId: string, branchId: string): Promise<boolean> {
+  const client = await pool.connect()
+  try {
+    const { rows } = await client.query('SELECT business_id FROM "Branch" WHERE id = $1', [branchId])
+    return rows.length > 0 && rows[0].business_id === bizId
+  } finally {
+    client.release()
+  }
+}
+
 export async function GET(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const branchId = req.nextUrl.searchParams.get('branchId')
   const userId = req.nextUrl.searchParams.get('userId')
-  const bizId = req.nextUrl.searchParams.get('bizId')
+  const bizId = req.nextUrl.searchParams.get('bizId') || session.bizId
+
+  if (bizId !== session.bizId && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const client = await pool.connect()
   try {
     let res
     if (branchId) {
+      // ownership check
+      const ok = await branchBelongs(session.bizId, branchId)
+      if (!ok && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       res = await client.query(
         `SELECT eb.*, u.name as user_name, u.email as user_email, u.color as user_color, u.phone as user_phone, u.role as user_role
          FROM "EmployeeBranch" eb
@@ -26,11 +46,11 @@ export async function GET(req: NextRequest) {
         `SELECT eb.*, b.name as branch_name, b.address as branch_address
          FROM "EmployeeBranch" eb
          JOIN "Branch" b ON b.id = eb.branch_id
-         WHERE eb.user_id = $1
+         WHERE eb.user_id = $1 AND b.business_id = $2
          ORDER BY b.name`,
-        [userId]
+        [userId, session.bizId]
       )
-    } else if (bizId) {
+    } else {
       res = await client.query(
         `SELECT eb.*, u.name as user_name, u.email as user_email, u.color as user_color,
                 b.name as branch_name
@@ -41,8 +61,6 @@ export async function GET(req: NextRequest) {
          ORDER BY b.name, u.name`,
         [bizId]
       )
-    } else {
-      return NextResponse.json([], { status: 400 })
     }
 
     return NextResponse.json(res.rows.map(r => ({
@@ -70,11 +88,21 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/employee-branches — assign employee to branch
 export async function POST(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'manager' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { userId, branchId, role, permissions } = await req.json()
   if (!userId || !branchId) {
     return NextResponse.json({ error: 'Missing userId or branchId' }, { status: 400 })
+  }
+
+  const ok = await branchBelongs(session.bizId, branchId)
+  if (!ok && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const id = `eb-${Date.now()}`
@@ -92,13 +120,26 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/employee-branches — update permissions
 export async function PATCH(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'manager' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const { id, userId, branchId, permissions, role } = await req.json()
 
   const client = await pool.connect()
   try {
     if (id) {
+      const { rows } = await client.query(
+        `SELECT b.business_id FROM "EmployeeBranch" eb JOIN "Branch" b ON b.id = eb.branch_id WHERE eb.id = $1`,
+        [id]
+      )
+      if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      if (rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       const sets: string[] = []
       const vals: any[] = []
       let idx = 1
@@ -109,6 +150,10 @@ export async function PATCH(req: NextRequest) {
         await client.query(`UPDATE "EmployeeBranch" SET ${sets.join(', ')} WHERE id = $${idx}`, vals)
       }
     } else if (userId && branchId) {
+      const ok = await branchBelongs(session.bizId, branchId)
+      if (!ok && session.role !== 'superadmin') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
       const sets: string[] = []
       const vals: any[] = []
       let idx = 1
@@ -129,13 +174,26 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE /api/employee-branches?id=xxx — remove employee from branch
 export async function DELETE(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (session.role !== 'manager' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const client = await pool.connect()
   try {
+    const { rows } = await client.query(
+      `SELECT b.business_id FROM "EmployeeBranch" eb JOIN "Branch" b ON b.id = eb.branch_id WHERE eb.id = $1`,
+      [id]
+    )
+    if (rows.length === 0) return NextResponse.json({ ok: true })
+    if (rows[0].business_id !== session.bizId && session.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     await client.query('DELETE FROM "EmployeeBranch" WHERE id = $1', [id])
     return NextResponse.json({ ok: true })
   } finally {
