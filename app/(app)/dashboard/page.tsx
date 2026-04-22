@@ -11,6 +11,7 @@ import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { WelcomeModal } from '@/components/shared/WelcomeModal'
 import { SHIFTS, EMPLOYEES, SHIFT_APPLICATIONS, getDayCoverage } from '@/lib/mock-data'
 import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
+import { safeFetchArray } from '@/lib/safe-fetch'
 import { useBranch } from '@/contexts/BranchContext'
 import type { Shift, User, Branch } from '@/types'
 import { CalendarDays, Users, AlertTriangle, Clock, CheckCircle2, XCircle, ChevronRight, Plus, UserPlus, X, MapPin, Building2 } from 'lucide-react'
@@ -60,12 +61,12 @@ export default function DashboardPage() {
       getShiftsForBusiness(activeBusiness.id, activeBranch?.id),
       activeBranch ? getShiftsForBusiness(activeBusiness.id) : Promise.resolve([] as Shift[]),
       getEmployeesForBusiness(activeBusiness.id),
-      fetch(`/api/shift-applications?bizId=${activeBusiness.id}`).then(r => r.json()).catch(() => []),
+      safeFetchArray<FlatApp>(`/api/shift-applications?bizId=${activeBusiness.id}`),
     ]).then(([shifts, allShifts, emps, apps]) => {
       setRealShifts(shifts)
       setAllBranchShifts(activeBranch ? allShifts : shifts)
       setRealEmployees(emps)
-      setRealApps((apps as FlatApp[]).filter(a => a.status === 'pending'))
+      setRealApps(apps.filter(a => a.status === 'pending'))
     }).finally(() => setLoading(false))
   }, [activeBusiness?.id, activeBranch?.id])
 

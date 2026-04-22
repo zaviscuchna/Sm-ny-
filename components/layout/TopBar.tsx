@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { SHIFT_APPLICATIONS } from '@/lib/mock-data'
 import { isRegistered } from '@/lib/db'
+import { safeFetchArray } from '@/lib/safe-fetch'
 import { format, parseISO } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import Link from 'next/link'
@@ -56,10 +57,8 @@ export function TopBar({ title, subtitle }: TopBarProps) {
   useEffect(() => {
     if (!activeBusiness || user?.role !== 'manager') return
     if (isRegistered(activeBusiness.id)) {
-      fetch(`/api/shift-applications?bizId=${activeBusiness.id}`)
-        .then(r => r.json())
-        .then((data: FlatApp[]) => setApps(data.filter(a => a.status === 'pending')))
-        .catch(() => {})
+      safeFetchArray<FlatApp>(`/api/shift-applications?bizId=${activeBusiness.id}`)
+        .then(data => setApps(data.filter(a => a.status === 'pending')))
     } else {
       // Map mock ShiftApplications to flat format
       setApps(SHIFT_APPLICATIONS.filter(a => a.status === 'pending').map(a => ({

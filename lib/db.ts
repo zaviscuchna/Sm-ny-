@@ -11,6 +11,24 @@ import {
 import type { User, Business, Shift, Branch, EmployeeBranch, Permission } from '@/types'
 import type { WorkLog } from './work-logs'
 
+// Pomocný wrapper — na 401 odhlásí klienta (AuthContext listener) a vrátí fallback
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
+  const res = await fetch(url, init)
+  if (res.status === 401 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:expired'))
+  }
+  return res
+}
+
+async function safeArray<T>(url: string): Promise<T[]> {
+  try {
+    const res = await apiFetch(url)
+    if (!res.ok) return []
+    const data = await res.json().catch(() => null)
+    return Array.isArray(data) ? (data as T[]) : []
+  } catch { return [] }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function isRegistered(bizId: string): boolean {
@@ -35,9 +53,7 @@ function mockEmployees(bizId: string): User[] {
 
 export async function getEmployeesForBusiness(bizId: string): Promise<User[]> {
   if (!isRegistered(bizId)) return mockEmployees(bizId)
-  const res = await fetch(`/api/employees?bizId=${bizId}`)
-  if (!res.ok) return []
-  return res.json()
+  return safeArray<User>(`/api/employees?bizId=${bizId}`)
 }
 
 // ─── Shifts ───────────────────────────────────────────────────────────────────
@@ -49,9 +65,7 @@ export async function getShiftsForBusiness(bizId: string, branchId?: string | nu
   }
   const q = new URLSearchParams({ bizId })
   if (branchId) q.set('branchId', branchId)
-  const res = await fetch(`/api/shifts?${q}`)
-  if (!res.ok) return []
-  return res.json()
+  return safeArray<Shift>(`/api/shifts?${q}`)
 }
 
 export async function createShiftsInDB(
@@ -75,9 +89,7 @@ export async function getLogsForEmployee(employeeId: string, bizId: string): Pro
     const { getEmployeeLogs } = await import('./work-logs')
     return getEmployeeLogs(employeeId)
   }
-  const res = await fetch(`/api/work-logs?bizId=${bizId}&employeeId=${employeeId}`)
-  if (!res.ok) return []
-  return res.json()
+  return safeArray<WorkLog>(`/api/work-logs?bizId=${bizId}&employeeId=${employeeId}`)
 }
 
 export async function getLogsForBusiness(bizId: string, yearMonth: string): Promise<WorkLog[]> {
@@ -85,9 +97,7 @@ export async function getLogsForBusiness(bizId: string, yearMonth: string): Prom
     const { getAllMonthLogs } = await import('./work-logs')
     return getAllMonthLogs(yearMonth)
   }
-  const res = await fetch(`/api/work-logs?bizId=${bizId}&month=${yearMonth}`)
-  if (!res.ok) return []
-  return res.json()
+  return safeArray<WorkLog>(`/api/work-logs?bizId=${bizId}&month=${yearMonth}`)
 }
 
 export async function saveLogToDB(log: Omit<WorkLog, 'id' | 'hours'>, bizId: string): Promise<WorkLog> {
@@ -120,9 +130,7 @@ export async function deleteLogFromDB(id: string, bizId: string): Promise<void> 
 
 export async function getBranchesForBusiness(bizId: string): Promise<Branch[]> {
   if (!isRegistered(bizId)) return []
-  const res = await fetch(`/api/branches?bizId=${bizId}`)
-  if (!res.ok) return []
-  return res.json()
+  return safeArray<Branch>(`/api/branches?bizId=${bizId}`)
 }
 
 export async function createBranch(bizId: string, name: string, address?: string): Promise<Branch> {
@@ -146,9 +154,7 @@ export async function getEmployeeBranches(params: { branchId?: string; userId?: 
   if (params.branchId) query.set('branchId', params.branchId)
   if (params.userId) query.set('userId', params.userId)
   if (params.bizId) query.set('bizId', params.bizId)
-  const res = await fetch(`/api/employee-branches?${query}`)
-  if (!res.ok) return []
-  return res.json()
+  return safeArray<EmployeeBranch>(`/api/employee-branches?${query}`)
 }
 
 export async function assignEmployeeToBranch(userId: string, branchId: string, role?: string, permissions?: Permission[]): Promise<void> {

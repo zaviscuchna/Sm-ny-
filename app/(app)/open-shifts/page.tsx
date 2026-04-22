@@ -9,6 +9,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { SHIFTS, SHIFT_APPLICATIONS } from '@/lib/mock-data'
 import { isRegistered } from '@/lib/db'
+import { safeFetchArray } from '@/lib/safe-fetch'
 import { parseISO } from 'date-fns'
 import type { Shift, ShiftApplication } from '@/types'
 import { Clock, Calendar, Briefcase, CheckCircle2, XCircle, UserPlus, ChevronDown, ChevronUp, Repeat, Pencil, Trash2, Check, X } from 'lucide-react'
@@ -36,31 +37,26 @@ export default function OpenShiftsPage() {
     if (isRegistered(activeBusiness.id)) {
       const q = new URLSearchParams({ bizId: activeBusiness.id })
       if (activeBranch?.id) q.set('branchId', activeBranch.id)
-      fetch(`/api/shifts?${q}`)
-        .then(r => r.json())
-        .then((shifts: Shift[]) => {
-          const open = shifts.filter(s => s.status === 'open')
-          setOpenShifts(open)
-          // Load applications and reconstruct full ShiftApplication objects
-          return fetch(`/api/shift-applications?bizId=${activeBusiness.id}`)
-            .then(r => r.json())
-            .then((rawApps: { id: string; shiftId: string; employeeId: string; employeeName: string; status: string; createdAt: string }[]) => {
-              const full = rawApps.map(a => ({
-                id: a.id,
-                shift: open.find(s => s.id === a.shiftId) ?? { id: a.shiftId, businessId: activeBusiness.id, date: '', startTime: '', endTime: '', roleNeeded: '', status: 'open' as const },
-                employee: { id: a.employeeId, name: a.employeeName, email: '', role: 'employee' as const, color: '#6366f1' },
-                status: a.status as 'pending' | 'approved' | 'rejected',
-                createdAt: a.createdAt,
-              }))
-              setApps(full)
-              // Pre-populate appliedShifts for current employee
-              if (user) {
-                const mine = full.filter(a => a.employee.id === user.id && (a.status === 'pending' || a.status === 'approved')).map(a => a.shift.id)
-                setAppliedShifts(new Set(mine))
-              }
-            })
+      safeFetchArray<Shift>(`/api/shifts?${q}`).then(shifts => {
+        const open = shifts.filter(s => s.status === 'open')
+        setOpenShifts(open)
+        safeFetchArray<{ id: string; shiftId: string; employeeId: string; employeeName: string; status: string; createdAt: string }>(
+          `/api/shift-applications?bizId=${activeBusiness.id}`
+        ).then(rawApps => {
+          const full = rawApps.map(a => ({
+            id: a.id,
+            shift: open.find(s => s.id === a.shiftId) ?? { id: a.shiftId, businessId: activeBusiness.id, date: '', startTime: '', endTime: '', roleNeeded: '', status: 'open' as const },
+            employee: { id: a.employeeId, name: a.employeeName, email: '', role: 'employee' as const, color: '#6366f1' },
+            status: a.status as 'pending' | 'approved' | 'rejected',
+            createdAt: a.createdAt,
+          }))
+          setApps(full)
+          if (user) {
+            const mine = full.filter(a => a.employee.id === user.id && (a.status === 'pending' || a.status === 'approved')).map(a => a.shift.id)
+            setAppliedShifts(new Set(mine))
+          }
         })
-        .catch(() => {})
+      })
     } else {
       setOpenShifts(SHIFTS.filter(s => s.status === 'open'))
       setApps(SHIFT_APPLICATIONS)

@@ -9,6 +9,7 @@ import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { WelcomeModal } from '@/components/shared/WelcomeModal'
 import { sumHours } from '@/lib/work-logs'
 import { getLogsForEmployee, saveLogToDB, deleteLogFromDB, getShiftsForBusiness, isRegistered } from '@/lib/db'
+import { safeFetchArray } from '@/lib/safe-fetch'
 import type { WorkLog } from '@/lib/work-logs'
 import type { Shift } from '@/types'
 import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight, Handshake, ArrowRightLeft, X as XIcon } from 'lucide-react'
@@ -50,16 +51,8 @@ export default function MyShiftsPage() {
   useEffect(() => {
     if (!activeBusiness || !user) return
     if (isRegistered(activeBusiness.id)) {
-      // Fetch only THIS employee's assigned shifts directly from server
-      fetch(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`)
-        .then(r => r.json())
-        .then(setMyShiftsRaw)
-        .catch(() => {})
-      // Also fetch all shifts for the open-shifts section
-      fetch(`/api/shifts?bizId=${activeBusiness.id}`)
-        .then(r => r.json())
-        .then(setAllBizShifts)
-        .catch(() => {})
+      safeFetchArray<Shift>(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`).then(setMyShiftsRaw)
+      safeFetchArray<Shift>(`/api/shifts?bizId=${activeBusiness.id}`).then(setAllBizShifts)
     } else {
       getShiftsForBusiness(activeBusiness.id).then(shifts => {
         setAllBizShifts(shifts)
@@ -88,34 +81,28 @@ export default function MyShiftsPage() {
   useEffect(() => {
     if (!activeBusiness || !user) return
     if (!isRegistered(activeBusiness.id)) return
-    fetch(`/api/employees?bizId=${activeBusiness.id}`)
-      .then(r => r.json())
-      .then((emps: Colleague[]) => setColleagues(emps.filter(e => e.id !== user.id)))
-      .catch(() => {})
+    safeFetchArray<Colleague>(`/api/employees?bizId=${activeBusiness.id}`)
+      .then(emps => setColleagues(emps.filter(e => e.id !== user.id)))
     loadSwaps()
   }, [activeBusiness?.id, user?.id])
 
   const loadSwaps = () => {
     if (!activeBusiness || !user || !isRegistered(activeBusiness.id)) return
-    fetch(`/api/shift-swaps?status=pending`)
-      .then(r => r.json())
-      .then((data: SwapRequest[]) => setSwaps(Array.isArray(data) ? data : []))
-      .catch(() => {})
+    safeFetchArray<SwapRequest>(`/api/shift-swaps?status=pending`).then(setSwaps)
   }
 
   // Load existing applications from DB
   useEffect(() => {
     if (!activeBusiness || !user) return
     if (!isRegistered(activeBusiness.id)) return
-    fetch(`/api/shift-applications?bizId=${activeBusiness.id}`)
-      .then(r => r.json())
-      .then((apps: { shiftId: string; employeeId: string; status: string }[]) => {
-        const myPending = apps
-          .filter(a => a.employeeId === user.id && (a.status === 'pending' || a.status === 'approved'))
-          .map(a => a.shiftId)
-        setAppliedShifts(new Set(myPending))
-      })
-      .catch(() => {})
+    safeFetchArray<{ shiftId: string; employeeId: string; status: string }>(
+      `/api/shift-applications?bizId=${activeBusiness.id}`
+    ).then(apps => {
+      const myPending = apps
+        .filter(a => a.employeeId === user.id && (a.status === 'pending' || a.status === 'approved'))
+        .map(a => a.shiftId)
+      setAppliedShifts(new Set(myPending))
+    })
   }, [activeBusiness?.id, user?.id])
 
   // ─── Work log state ──────────────────────────────────────────────────────────
@@ -258,8 +245,8 @@ export default function MyShiftsPage() {
       toast.success('Výměna schválena — směny se prohodily')
       // Reload shifts, swaps
       if (activeBusiness && user && isRegistered(activeBusiness.id)) {
-        fetch(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`).then(r => r.json()).then(setMyShiftsRaw).catch(() => {})
-        fetch(`/api/shifts?bizId=${activeBusiness.id}`).then(r => r.json()).then(setAllBizShifts).catch(() => {})
+        safeFetchArray<Shift>(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`).then(setMyShiftsRaw)
+        safeFetchArray<Shift>(`/api/shifts?bizId=${activeBusiness.id}`).then(setAllBizShifts)
       }
     } else {
       toast(action === 'reject' ? 'Výměna odmítnuta' : 'Výměna zrušena')
