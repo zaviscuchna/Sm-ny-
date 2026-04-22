@@ -74,23 +74,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [joinCode,       setJoinCode]       = useState<string | null>(null)
 
   useEffect(() => {
-    async function bootstrap() {
-      try {
-        // Try localStorage first, then cookie fallback (iOS PWA clears localStorage)
-        let stored = localStorage.getItem(STORAGE_KEY)
-        if (!stored) stored = getCookie(COOKIE_USER_KEY)
+    try {
+      let stored = localStorage.getItem(STORAGE_KEY)
+      if (!stored) stored = getCookie(COOKIE_USER_KEY)
 
-        if (!stored) {
-          setLoading(false)
-          return
-        }
-
+      if (stored) {
         const parsedUser = JSON.parse(stored)
         setUser(parsedUser)
         localStorage.setItem(STORAGE_KEY, JSON.stringify(parsedUser))
         setCookie(COOKIE_USER_KEY, JSON.stringify(parsedUser))
 
-        // Restore active business
         let storedBizId = localStorage.getItem(BIZ_STORAGE_KEY)
           || getCookie(COOKIE_BIZ_KEY)
           || (parsedUser as any).businessId
@@ -104,35 +97,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setCookie(COOKIE_BIZ_KEY, biz.id)
           }
         }
-
-        // Session validation for registered users — expired cookie? Force logout.
-        const bizId = storedBizId ?? (parsedUser as any).businessId
-        const isRegistered = typeof bizId === 'string' && bizId.startsWith('biz-reg-')
-        if (isRegistered) {
-          try {
-            const res = await fetch('/api/auth/me', { credentials: 'same-origin' })
-            if (res.ok) {
-              const data = await res.json()
-              if (!data?.user) {
-                // Cookie expired — wipe local state
-                localStorage.removeItem(STORAGE_KEY)
-                localStorage.removeItem(BIZ_STORAGE_KEY)
-                deleteCookie(COOKIE_USER_KEY)
-                deleteCookie(COOKIE_BIZ_KEY)
-                setUser(null)
-                setActiveBusiness(null)
-                setJoinCode(null)
-              }
-            }
-          } catch {
-            // Network error — leave as is (offline mode)
-          }
-        }
-      } catch {}
-      setLoading(false)
-    }
-    bootstrap()
+      }
+    } catch {}
+    setLoading(false)
   }, [])
+
+  // Separate effect: validate session cookie for registered users after mount.
+  // If cookie is expired, wipe local state to force re-login.
+  useEffect(() => {
+    if (!user) return
+    const bizId = (user as any).businessId
+    if (typeof bizId !== 'string' || !bizId.startsWith('biz-reg-')) return
+
+    let cancelled = false
+    fetch('/api/auth/me', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled) return
+        if (data && !data.user) {
+          localStorage.removeItem(STORAGE_KEY)
+          localStorage.removeItem(BIZ_STORAGE_KEY)
+          deleteCookie(COOKIE_USER_KEY)
+          deleteCookie(COOKIE_BIZ_KEY)
+          setUser(null)
+          setActiveBusiness(null)
+          setJoinCode(null)
+        }
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [user?.id])
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
