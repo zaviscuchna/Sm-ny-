@@ -31,9 +31,10 @@ export async function GET(req: NextRequest) {
     const params: any[] = [bizId]
     let idx = 2
     if (employeeId) { shiftQuery += ` AND s.assigned_employee_id = $${idx++}`; params.push(employeeId) }
-    // Filter by branch — ale včetně NULL branches (směny vytvořené bez přiřazení k pobočce),
-    // aby se "osiřelé" směny zobrazily v každém branch filtru, ne aby zmizely.
-    if (branchId) { shiftQuery += ` AND (s.branch_id = $${idx} OR s.branch_id IS NULL)`; params.push(branchId); idx++ }
+    // Filter by branch — pouze přesná shoda. Směny bez pobočky (orphans) se zobrazí
+    // jen ve výchozím pohledu "Všechny pobočky" (kdy branchId není předán),
+    // aby byl per-branch pohled čistý a manažer je viděl jasně a uklidil.
+    if (branchId) { shiftQuery += ` AND s.branch_id = $${idx++}`; params.push(branchId) }
     if (status) { shiftQuery += ` AND s.status = $${idx++}`; params.push(status) }
     shiftQuery += ' ORDER BY s.date'
 

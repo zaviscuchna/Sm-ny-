@@ -46,22 +46,55 @@ function addMinutes(time: string, mins: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
-// Rozvržení překrývajících se směn — vrací pro každou směnu {lane, total},
-// kde total = max současných souběhů v čase této směny, lane = pořadí v clusteru.
-// Použije se pro horizontální rozložení karet (žádný překryv).
-function computeShiftLayout(dayShifts: Shift[]): Map<string, { lane: number; total: number }> {
-  const result = new Map<string, { lane: number; total: number }>()
+// Barevné palety pobočka — 6 barev, deterministický hash podle branch.id
+const BRANCH_DOT_CLASSES = [
+  'bg-sky-400', 'bg-violet-400', 'bg-emerald-400',
+  'bg-pink-400', 'bg-orange-400', 'bg-teal-400',
+]
+function branchDotClass(branchId?: string | null): string {
+  if (!branchId) return 'bg-amber-400'
+  let hash = 0
+  for (let i = 0; i < branchId.length; i++) hash = (hash * 31 + branchId.charCodeAt(i)) >>> 0
+  return BRANCH_DOT_CLASSES[hash % BRANCH_DOT_CLASSES.length]
+}
+
+// Cluster = skupina směn s identickým časem + rolí, zobrazí se jako 1 karta.
+interface ShiftCluster {
+  startTime: string
+  endTime:   string
+  role:      string
+  shifts:    Shift[]
+  lane:      number
+  total:     number
+}
+
+// Rozvržení clusterů v kalendáři:
+// 1) Směny se stejným časem a rolí se sloučí do 1 clusteru (1 karta, pobočky jako řádky uvnitř)
+// 2) Clustery s různými časy, které se časově překrývají, dostanou horizontální lane (50/50 atd.)
+function computeClusters(dayShifts: Shift[]): ShiftCluster[] {
+  // 1) Seskupit
+  const byKey = new Map<string, ShiftCluster>()
+  const order: ShiftCluster[] = []
   for (const s of dayShifts) {
-    const sStart = s.startTime
-    const sEnd   = s.endTime
-    const cluster = dayShifts.filter(o => o.startTime < sEnd && o.endTime > sStart)
-    cluster.sort((a, b) => a.startTime === b.startTime
-      ? a.id.localeCompare(b.id)
-      : a.startTime.localeCompare(b.startTime))
-    const lane = cluster.findIndex(x => x.id === s.id)
-    result.set(s.id, { lane: Math.max(0, lane), total: Math.max(1, cluster.length) })
+    const key = `${s.startTime}|${s.endTime}|${s.roleNeeded}`
+    let c = byKey.get(key)
+    if (!c) {
+      c = { startTime: s.startTime, endTime: s.endTime, role: s.roleNeeded, shifts: [], lane: 0, total: 1 }
+      byKey.set(key, c)
+      order.push(c)
+    }
+    c.shifts.push(s)
   }
-  return result
+  // 2) Překryv mezi clustery
+  for (const c of order) {
+    const overlapping = order.filter(o => o.startTime < c.endTime && o.endTime > c.startTime)
+    overlapping.sort((a, b) => a.startTime === b.startTime
+      ? a.role.localeCompare(b.role)
+      : a.startTime.localeCompare(b.startTime))
+    c.lane  = Math.max(0, overlapping.indexOf(c))
+    c.total = Math.max(1, overlapping.length)
+  }
+  return order
 }
 
 const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -409,7 +442,7 @@ export default function CalendarPage() {
               {weekDays.map(({ dateStr }, colIdx) => {
                 const isToday   = dateStr === todayStr
                 const dayShifts = weekShifts.filter(s => s.date === dateStr)
-                const shiftLayout = computeShiftLayout(dayShifts)
+                const clusters  = computeClusters(dayShifts)
                 return (
                   <div key={dateStr}
                     className={`flex-1 relative border-r last:border-r-0 border-slate-100 dark:border-slate-800 group ${isToday ? 'bg-indigo-50/20 dark:bg-indigo-900/10' : ''}`}>
@@ -441,49 +474,98 @@ export default function CalendarPage() {
                       </div>
                     )}
 
-                    {dayShifts.map(shift => {
-                      if (dragging?.shift.id === shift.id) return null
-                      const top    = timeToY(shift.startTime)
-                      const dur    = durMins(shift.startTime, shift.endTime)
+                    {clusters.map(cluster => {
+                      // Pokud je přetažený jediný shift z clusteru, skryjeme celý cluster
+                      if (cluster.shifts.length === 1 && dragging?.shift.id === cluster.shifts[0].id) return null
+
+                      const top    = timeToY(cluster.startTime)
+                      const dur    = durMins(cluster.startTime, cluster.endTime)
                       const height = Math.max((dur / 60) * HOUR_HEIGHT, 28)
-                      const colors = STATUS_COLORS[shift.status] ?? STATUS_COLORS.open
-                      // Zaměstnanec může navrhnout výměnu kliknutím na cizí přiřazenou směnu
-                      const isForeign = !isManager && shift.assignedEmployee && user && shift.assignedEmployee.id !== user.id
-                      // Jen budoucí směny — minulé nesmí být měněny
-                      const isFuture = shift.date >= todayStr
-                      const clickable = isManager || (isForeign && isFuture)
-                      // Překryv: aktuální směna je v clusteru o velikosti `total`, na pozici `lane`
-                      const lay = shiftLayout.get(shift.id) ?? { lane: 0, total: 1 }
-                      const widthPct = 100 / lay.total
-                      const leftPct  = widthPct * lay.lane
+                      const widthPct = 100 / cluster.total
+                      const leftPct  = widthPct * cluster.lane
+                      const isFuture = cluster.shifts[0].date >= todayStr
+
+                      // ── SINGLE SHIFT ────────────────────────────────────────
+                      if (cluster.shifts.length === 1) {
+                        const shift = cluster.shifts[0]
+                        const colors = STATUS_COLORS[shift.status] ?? STATUS_COLORS.open
+                        const isForeign = !isManager && shift.assignedEmployee && user && shift.assignedEmployee.id !== user.id
+                        const clickable = isManager || (isForeign && isFuture)
+                        return (
+                          <div
+                            key={cluster.role + cluster.startTime}
+                            onMouseDown={e => isManager ? onShiftMouseDown(e, shift, colIdx) : undefined}
+                            onClick={isForeign && isFuture ? () => openSwapProposal(shift) : undefined}
+                            className={`absolute rounded-lg border-l-2 px-1.5 py-1 shadow-sm overflow-hidden z-10
+                              ${colors.bg} ${colors.border} ${colors.text}
+                              ${isManager ? 'cursor-grab hover:shadow-md' : clickable ? 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300 dark:hover:ring-indigo-700' : 'cursor-default'}
+                              transition-shadow`}
+                            style={{
+                              top, height,
+                              left:  `calc(${leftPct}% + 2px)`,
+                              width: `calc(${widthPct}% - 4px)`,
+                              borderLeftColor: shift.assignedEmployee?.color ?? undefined,
+                            }}
+                            title={isForeign && isFuture ? 'Klikni pro návrh výměny' : undefined}
+                          >
+                            <p className="text-[10px] font-bold truncate leading-tight">{shift.roleNeeded}</p>
+                            {height > 30 && (
+                              <p className="text-[9px] opacity-60 truncate leading-tight">{shift.startTime}–{shift.endTime}</p>
+                            )}
+                            {height > 52 && shift.branch && (
+                              <p className="text-[9px] opacity-70 truncate leading-tight flex items-center gap-1">
+                                <span className={`inline-block w-1.5 h-1.5 rounded-full ${branchDotClass(shift.branchId)}`} />
+                                {shift.branch.name}
+                              </p>
+                            )}
+                            {height > 68 && shift.assignedEmployee && (
+                              <p className="text-[9px] opacity-60 truncate">{shift.assignedEmployee.name.split(' ')[0]}</p>
+                            )}
+                          </div>
+                        )
+                      }
+
+                      // ── COMBINED CLUSTER ────────────────────────────────────
+                      // Stejný čas + role u N směn → jedna karta, řádky per pobočka
                       return (
                         <div
-                          key={shift.id}
-                          onMouseDown={e => isManager ? onShiftMouseDown(e, shift, colIdx) : undefined}
-                          onClick={isForeign && isFuture ? () => openSwapProposal(shift) : undefined}
-                          className={`absolute rounded-lg border-l-2 px-1.5 py-1 shadow-sm overflow-hidden z-10
-                            ${colors.bg} ${colors.border} ${colors.text}
-                            ${isManager ? 'cursor-grab hover:shadow-md' : clickable ? 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300 dark:hover:ring-indigo-700' : 'cursor-default'}
-                            transition-shadow`}
+                          key={cluster.role + cluster.startTime}
+                          className="absolute rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 shadow-sm overflow-hidden z-10 flex flex-col"
                           style={{
-                            top,
-                            height,
+                            top, height,
                             left:  `calc(${leftPct}% + 2px)`,
                             width: `calc(${widthPct}% - 4px)`,
-                            borderLeftColor: shift.assignedEmployee?.color ?? undefined,
                           }}
-                          title={isForeign && isFuture ? 'Klikni pro návrh výměny' : undefined}
                         >
-                          <p className="text-[10px] font-bold truncate leading-tight">{shift.roleNeeded}</p>
-                          {height > 30 && (
-                            <p className="text-[9px] opacity-60 truncate leading-tight">{shift.startTime}–{shift.endTime}</p>
-                          )}
-                          {height > 52 && shift.assignedEmployee && lay.total === 1 && (
-                            <p className="text-[9px] opacity-60 truncate">{shift.assignedEmployee.name.split(' ')[0]}</p>
-                          )}
-                          {shift.branch && lay.total > 1 && height > 42 && (
-                            <p className="text-[9px] opacity-70 truncate leading-tight">{shift.branch.name}</p>
-                          )}
+                          <div className="px-1.5 py-0.5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 flex items-center justify-between gap-1 flex-shrink-0">
+                            <span className="text-[10px] font-bold truncate text-slate-700 dark:text-slate-300">{cluster.role}</span>
+                            <span className="text-[9px] text-slate-400 flex-shrink-0">{cluster.startTime}–{cluster.endTime}</span>
+                          </div>
+                          <div className="flex-1 min-h-0 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
+                            {cluster.shifts.map(s => {
+                              const isForeign = !isManager && s.assignedEmployee && user && s.assignedEmployee.id !== user.id
+                              const clickable = isForeign && isFuture
+                              const statusTint = s.status === 'open' ? 'bg-red-50/60 dark:bg-red-900/10' : 'bg-white/40 dark:bg-slate-800/40'
+                              return (
+                                <div
+                                  key={s.id}
+                                  onClick={clickable ? () => openSwapProposal(s) : undefined}
+                                  className={`flex items-center gap-1 px-1.5 py-0.5 ${statusTint}
+                                    ${clickable ? 'cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-900/30' : ''}
+                                    transition-colors text-[9px] leading-tight`}
+                                  title={clickable ? 'Klikni pro návrh výměny' : undefined}
+                                >
+                                  <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${branchDotClass(s.branchId)}`} />
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300 truncate">
+                                    {s.branch?.name ?? 'Bez pobočky'}
+                                  </span>
+                                  <span className="text-slate-400 dark:text-slate-500 truncate ml-auto">
+                                    {s.assignedEmployee ? s.assignedEmployee.name.split(' ')[0] : 'Volná'}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
                         </div>
                       )
                     })}
