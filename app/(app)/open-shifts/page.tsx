@@ -32,10 +32,26 @@ const BRANCH_PALETTES = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60',
   'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-900/60',
 ]
-function branchColorClasses(branchId: string): string {
+// Border palety pro levý pruh karty — korespondují s BRANCH_PALETTES pořadím
+const BRANCH_BORDERS = [
+  'border-l-sky-400',
+  'border-l-violet-400',
+  'border-l-emerald-400',
+  'border-l-pink-400',
+  'border-l-orange-400',
+  'border-l-teal-400',
+]
+function branchHashIndex(branchId: string): number {
   let hash = 0
   for (let i = 0; i < branchId.length; i++) hash = (hash * 31 + branchId.charCodeAt(i)) >>> 0
-  return BRANCH_PALETTES[hash % BRANCH_PALETTES.length]
+  return hash % BRANCH_PALETTES.length
+}
+function branchColorClasses(branchId: string): string {
+  return BRANCH_PALETTES[branchHashIndex(branchId)]
+}
+function branchBorderClass(branchId?: string | null): string {
+  if (!branchId) return 'border-l-amber-400'
+  return BRANCH_BORDERS[branchHashIndex(branchId)]
 }
 
 export default function OpenShiftsPage() {
@@ -314,7 +330,7 @@ export default function OpenShiftsPage() {
               const isExpanded = expandedShift === shift.id
 
               return (
-                <div key={shift.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                <div key={shift.id} className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm border-l-4 ${branchBorderClass(shift.branchId)}`}>
                   {/* Header */}
                   <div className="p-5 flex gap-4 items-start">
                     <div className="flex-shrink-0 w-10 h-10 bg-red-50 dark:bg-red-900/30 rounded-xl flex items-center justify-center">

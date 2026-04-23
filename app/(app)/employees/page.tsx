@@ -172,6 +172,82 @@ export default function EmployeesPage() {
     toast.success('Přiřazení zrušeno')
   }
 
+  // ── Bulk unassign state ───────────────────────────────────────────────────
+  const [bulkFor, setBulkFor] = useState<string | null>(null)
+  const [bulkFrom, setBulkFrom] = useState('')
+  const [bulkTo, setBulkTo] = useState('')
+  const [bulkGroupId, setBulkGroupId] = useState<string | null>(null)
+  const [bulkPreview, setBulkPreview] = useState<{ count: number; firstDate?: string; lastDate?: string } | null>(null)
+  const [bulkSaving, setBulkSaving] = useState(false)
+
+  const openBulkUnassign = (empId: string) => {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    setBulkFor(empId)
+    setBulkFrom(today)
+    setBulkTo('')
+    setBulkGroupId(null)
+    setBulkPreview(null)
+  }
+
+  const fetchBulkPreview = async () => {
+    if (!bulkFor || !bizIsRegistered) return
+    const res = await fetch('/api/shifts/bulk-unassign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        employeeId: bulkFor,
+        fromDate: bulkFrom || undefined,
+        toDate: bulkTo || undefined,
+        groupId: bulkGroupId || undefined,
+        preview: true,
+      }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      toast.error(d.error ?? 'Chyba při náhledu')
+      return
+    }
+    const data = await res.json() as { count: number; shifts: Array<{ date: string }> }
+    setBulkPreview({
+      count: data.count,
+      firstDate: data.shifts[0]?.date,
+      lastDate: data.shifts[data.shifts.length - 1]?.date,
+    })
+  }
+
+  const applyBulkUnassign = async () => {
+    if (!bulkFor || !bizIsRegistered || !bulkPreview || bulkPreview.count === 0) return
+    setBulkSaving(true)
+    try {
+      const res = await fetch('/api/shifts/bulk-unassign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: bulkFor,
+          fromDate: bulkFrom || undefined,
+          toDate: bulkTo || undefined,
+          groupId: bulkGroupId || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toast.error(d.error ?? 'Chyba při odhlášení')
+        return
+      }
+      const data = await res.json() as { count: number; unassigned: string[] }
+      const unassignedSet = new Set(data.unassigned)
+      setBizShifts(prev => prev.map(s => unassignedSet.has(s.id)
+        ? { ...s, assignedEmployee: undefined, status: 'open' as const }
+        : s
+      ))
+      toast.success(`Odhlášeno ${data.count} směn`)
+      setBulkFor(null)
+      setBulkPreview(null)
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
   const todayStr = format(new Date(), 'yyyy-MM-dd')
 
   return (
@@ -384,10 +460,95 @@ export default function EmployeesPage() {
 
                     {/* Upcoming shifts */}
                     <div>
-                      <p className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1.5">
-                        <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
-                        Nadcházející směny ({upcomingShifts.length})
-                      </p>
+                      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                          <CalendarDays className="w-3.5 h-3.5 text-indigo-500" />
+                          Nadcházející směny ({upcomingShifts.length})
+                        </p>
+                        {bizIsRegistered && upcomingShifts.length > 0 && (
+                          <button
+                            onClick={() => openBulkUnassign(emp.id)}
+                            className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                          >
+                            Odhlásit hromadně
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Bulk unassign form */}
+                      {bulkFor === emp.id && (() => {
+                        const groupIds = Array.from(new Set(
+                          upcomingShifts.map(s => s.recurringGroupId).filter(Boolean)
+                        )) as string[]
+                        return (
+                        <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl space-y-2">
+                          <p className="text-[11px] font-semibold text-red-700 dark:text-red-400">
+                            Hromadné odhlášení {emp.name}
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] text-slate-500 block mb-0.5">Od</label>
+                              <input type="date" value={bulkFrom} onChange={e => { setBulkFrom(e.target.value); setBulkPreview(null) }}
+                                className="w-full text-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5" />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-slate-500 block mb-0.5">Do (volitelné)</label>
+                              <input type="date" value={bulkTo} onChange={e => { setBulkTo(e.target.value); setBulkPreview(null) }}
+                                className="w-full text-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5" />
+                            </div>
+                          </div>
+                          {groupIds.length > 0 && (
+                            <div>
+                              <label className="text-[10px] text-slate-500 block mb-0.5">Jen série (volitelné)</label>
+                              <select value={bulkGroupId ?? ''} onChange={e => { setBulkGroupId(e.target.value || null); setBulkPreview(null) }}
+                                className="w-full text-xs rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                                <option value="">Všechny série</option>
+                                {groupIds.map(gid => {
+                                  const seriesShifts = upcomingShifts.filter(s => s.recurringGroupId === gid)
+                                  const first = seriesShifts[0]
+                                  return (
+                                    <option key={gid} value={gid}>
+                                      Série {first?.roleNeeded} {first?.startTime}–{first?.endTime} ({seriesShifts.length}×)
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-2 items-center pt-1">
+                            <button onClick={fetchBulkPreview}
+                              className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors">
+                              Spočítat náhled
+                            </button>
+                            {bulkPreview && (
+                              <p className="text-[11px] text-slate-600">
+                                {bulkPreview.count === 0
+                                  ? <span className="text-slate-400">Žádné směny k odhlášení</span>
+                                  : <><strong className="text-red-600">{bulkPreview.count}</strong> směn od {bulkPreview.firstDate} do {bulkPreview.lastDate}</>
+                                }
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={applyBulkUnassign}
+                              disabled={!bulkPreview || bulkPreview.count === 0 || bulkSaving}
+                              className="flex-1 text-xs font-semibold px-3 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {bulkSaving ? 'Odhlašuji…' : bulkPreview && bulkPreview.count > 0 ? `Odhlásit ${bulkPreview.count} směn` : 'Odhlásit'}
+                            </button>
+                            <button onClick={() => { setBulkFor(null); setBulkPreview(null) }}
+                              className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs hover:bg-slate-50 transition-colors">
+                              Zrušit
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-slate-500 leading-snug pt-1">
+                            Minulé směny se nikdy nemění. Odhlášené směny se stanou „volnými" a jiní zaměstnanci se na ně mohou přihlásit.
+                          </p>
+                        </div>
+                        )
+                      })()}
+
                       {upcomingShifts.length === 0 ? (
                         <p className="text-xs text-slate-400 pl-5">Žádné naplánované směny.</p>
                       ) : (

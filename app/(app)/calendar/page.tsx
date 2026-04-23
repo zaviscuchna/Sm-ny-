@@ -100,6 +100,44 @@ export default function CalendarPage() {
   const [mousePos,   setMousePos]   = useState<{ x: number; y: number } | null>(null)
   const gridRef = useRef<HTMLDivElement>(null)
 
+  // Swap proposal modal — pro zaměstnance klik na cizí směnu
+  const [swapTarget, setSwapTarget] = useState<Shift | null>(null)
+  const [swapMyShiftId, setSwapMyShiftId] = useState<string>('')
+  const [swapMessage, setSwapMessage] = useState('')
+  const [swapSending, setSwapSending] = useState(false)
+
+  const openSwapProposal = useCallback((shift: Shift) => {
+    setSwapTarget(shift)
+    setSwapMyShiftId('')
+    setSwapMessage('')
+  }, [])
+
+  const submitSwapProposal = useCallback(async () => {
+    if (!swapTarget || !swapMyShiftId || !swapTarget.assignedEmployee) return
+    setSwapSending(true)
+    try {
+      const res = await fetch('/api/shift-swaps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fromShiftId: swapMyShiftId,
+          toShiftId: swapTarget.id,
+          toUserId: swapTarget.assignedEmployee.id,
+          message: swapMessage || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toast.error(d.error ?? 'Chyba při návrhu výměny')
+        return
+      }
+      toast.success(`Návrh odeslán kolegovi ${swapTarget.assignedEmployee.name.split(' ')[0]}. Uvidí ho v Moje směny.`)
+      setSwapTarget(null)
+    } finally {
+      setSwapSending(false)
+    }
+  }, [swapTarget, swapMyShiftId, swapMessage])
+
   const weekStart = useMemo(() => {
     const monday = startOfWeek(new Date(), { weekStartsOn: 1 })
     return addDays(monday, weekOffset * 7)
@@ -347,19 +385,26 @@ export default function CalendarPage() {
                       const dur    = durMins(shift.startTime, shift.endTime)
                       const height = Math.max((dur / 60) * HOUR_HEIGHT, 28)
                       const colors = STATUS_COLORS[shift.status] ?? STATUS_COLORS.open
+                      // Zaměstnanec může navrhnout výměnu kliknutím na cizí přiřazenou směnu
+                      const isForeign = !isManager && shift.assignedEmployee && user && shift.assignedEmployee.id !== user.id
+                      // Jen budoucí směny — minulé nesmí být měněny
+                      const isFuture = shift.date >= todayStr
+                      const clickable = isManager || (isForeign && isFuture)
                       return (
                         <div
                           key={shift.id}
-                          onMouseDown={e => onShiftMouseDown(e, shift, colIdx)}
+                          onMouseDown={e => isManager ? onShiftMouseDown(e, shift, colIdx) : undefined}
+                          onClick={isForeign && isFuture ? () => openSwapProposal(shift) : undefined}
                           className={`absolute left-1 right-1 rounded-lg border-l-2 px-1.5 py-1 shadow-sm overflow-hidden z-10
                             ${colors.bg} ${colors.border} ${colors.text}
-                            ${isManager ? 'cursor-grab hover:shadow-md' : 'cursor-default'}
+                            ${isManager ? 'cursor-grab hover:shadow-md' : clickable ? 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300 dark:hover:ring-indigo-700' : 'cursor-default'}
                             transition-shadow`}
                           style={{
                             top,
                             height,
                             borderLeftColor: shift.assignedEmployee?.color ?? undefined,
                           }}
+                          title={isForeign && isFuture ? 'Klikni pro návrh výměny' : undefined}
                         >
                           <p className="text-[10px] font-bold truncate leading-tight">{shift.roleNeeded}</p>
                           {height > 30 && (
@@ -421,7 +466,78 @@ export default function CalendarPage() {
             Směny lze přetáhnout na jiný den nebo čas — změny se ukládají automaticky
           </p>
         )}
+        {!isManager && user?.role === 'employee' && showTeam && (
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
+            Tip: klikni na cizí směnu a navrhni kolegovi výměnu
+          </p>
+        )}
       </div>
+
+      {/* ── Swap proposal modal (zaměstnanec → cizí směna) ─────────────── */}
+      {swapTarget && swapTarget.assignedEmployee && user && (() => {
+        const myFutureShifts = shifts
+          .filter(s => s.assignedEmployee?.id === user.id && s.date >= todayStr)
+          .sort((a, b) => a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date))
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSwapTarget(null)}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-500">Návrh výměny</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">S kolegou {swapTarget.assignedEmployee.name}</p>
+                <div className="mt-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-800 dark:text-slate-200">{swapTarget.roleNeeded}</strong>
+                  <span className="mx-1 text-slate-400">·</span>
+                  {format(new Date(swapTarget.date + 'T12:00'), 'EEE d. M.', { locale: cs })} {swapTarget.startTime}–{swapTarget.endTime}
+                </div>
+              </div>
+              <div className="px-5 py-4 overflow-y-auto flex-1">
+                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Za kterou tvoji směnu?</p>
+                {myFutureShifts.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-6 text-center">Nemáš žádné budoucí směny k nabídnutí.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {myFutureShifts.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSwapMyShiftId(s.id)}
+                        className={`w-full text-left px-3 py-2 rounded-xl border transition-colors ${
+                          swapMyShiftId === s.id
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.roleNeeded}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {format(new Date(s.date + 'T12:00'), 'EEE d. M.', { locale: cs })} · {s.startTime}–{s.endTime}
+                          {s.branch && <span className="ml-1">· {s.branch.name}</span>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-1.5">Zpráva (volitelná)</label>
+                <textarea
+                  value={swapMessage}
+                  onChange={e => setSwapMessage(e.target.value)}
+                  placeholder="Např. Mám lékaře, mohl bys prosím..."
+                  rows={2}
+                  className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex gap-2 bg-slate-50/50 dark:bg-slate-800/50">
+                <Button
+                  onClick={submitSwapProposal}
+                  disabled={!swapMyShiftId || swapSending}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40"
+                >
+                  {swapSending ? 'Odesílám…' : 'Odeslat návrh'}
+                </Button>
+                <Button variant="outline" onClick={() => setSwapTarget(null)}>Zrušit</Button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
