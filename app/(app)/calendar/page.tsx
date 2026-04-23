@@ -46,6 +46,24 @@ function addMinutes(time: string, mins: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
+// Rozvržení překrývajících se směn — vrací pro každou směnu {lane, total},
+// kde total = max současných souběhů v čase této směny, lane = pořadí v clusteru.
+// Použije se pro horizontální rozložení karet (žádný překryv).
+function computeShiftLayout(dayShifts: Shift[]): Map<string, { lane: number; total: number }> {
+  const result = new Map<string, { lane: number; total: number }>()
+  for (const s of dayShifts) {
+    const sStart = s.startTime
+    const sEnd   = s.endTime
+    const cluster = dayShifts.filter(o => o.startTime < sEnd && o.endTime > sStart)
+    cluster.sort((a, b) => a.startTime === b.startTime
+      ? a.id.localeCompare(b.id)
+      : a.startTime.localeCompare(b.startTime))
+    const lane = cluster.findIndex(x => x.id === s.id)
+    result.set(s.id, { lane: Math.max(0, lane), total: Math.max(1, cluster.length) })
+  }
+  return result
+}
+
 const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }> = {
   confirmed: { bg: 'bg-green-50 dark:bg-green-900/30', border: 'border-green-400', text: 'text-green-800 dark:text-green-300' },
   assigned:  { bg: 'bg-blue-50 dark:bg-blue-900/30',  border: 'border-blue-400',  text: 'text-blue-800 dark:text-blue-300' },
@@ -391,6 +409,7 @@ export default function CalendarPage() {
               {weekDays.map(({ dateStr }, colIdx) => {
                 const isToday   = dateStr === todayStr
                 const dayShifts = weekShifts.filter(s => s.date === dateStr)
+                const shiftLayout = computeShiftLayout(dayShifts)
                 return (
                   <div key={dateStr}
                     className={`flex-1 relative border-r last:border-r-0 border-slate-100 dark:border-slate-800 group ${isToday ? 'bg-indigo-50/20 dark:bg-indigo-900/10' : ''}`}>
@@ -433,18 +452,24 @@ export default function CalendarPage() {
                       // Jen budoucí směny — minulé nesmí být měněny
                       const isFuture = shift.date >= todayStr
                       const clickable = isManager || (isForeign && isFuture)
+                      // Překryv: aktuální směna je v clusteru o velikosti `total`, na pozici `lane`
+                      const lay = shiftLayout.get(shift.id) ?? { lane: 0, total: 1 }
+                      const widthPct = 100 / lay.total
+                      const leftPct  = widthPct * lay.lane
                       return (
                         <div
                           key={shift.id}
                           onMouseDown={e => isManager ? onShiftMouseDown(e, shift, colIdx) : undefined}
                           onClick={isForeign && isFuture ? () => openSwapProposal(shift) : undefined}
-                          className={`absolute left-1 right-1 rounded-lg border-l-2 px-1.5 py-1 shadow-sm overflow-hidden z-10
+                          className={`absolute rounded-lg border-l-2 px-1.5 py-1 shadow-sm overflow-hidden z-10
                             ${colors.bg} ${colors.border} ${colors.text}
                             ${isManager ? 'cursor-grab hover:shadow-md' : clickable ? 'cursor-pointer hover:shadow-md hover:ring-2 hover:ring-indigo-300 dark:hover:ring-indigo-700' : 'cursor-default'}
                             transition-shadow`}
                           style={{
                             top,
                             height,
+                            left:  `calc(${leftPct}% + 2px)`,
+                            width: `calc(${widthPct}% - 4px)`,
                             borderLeftColor: shift.assignedEmployee?.color ?? undefined,
                           }}
                           title={isForeign && isFuture ? 'Klikni pro návrh výměny' : undefined}
@@ -453,8 +478,11 @@ export default function CalendarPage() {
                           {height > 30 && (
                             <p className="text-[9px] opacity-60 truncate leading-tight">{shift.startTime}–{shift.endTime}</p>
                           )}
-                          {height > 52 && shift.assignedEmployee && (
+                          {height > 52 && shift.assignedEmployee && lay.total === 1 && (
                             <p className="text-[9px] opacity-60 truncate">{shift.assignedEmployee.name.split(' ')[0]}</p>
+                          )}
+                          {shift.branch && lay.total > 1 && height > 42 && (
+                            <p className="text-[9px] opacity-70 truncate leading-tight">{shift.branch.name}</p>
                           )}
                         </div>
                       )
