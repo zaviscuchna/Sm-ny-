@@ -63,6 +63,8 @@ export default function OpenShiftsPage() {
   const [apps, setApps] = useState<ShiftApplication[]>([])
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
   const [branchPickerFor, setBranchPickerFor] = useState<string | null>(null)
+  // Default apply-to-series když je směna v sérii — per-shift (reset při otevření pickeru)
+  const [pickerApplySeries, setPickerApplySeries] = useState(true)
 
   useEffect(() => {
     if (!activeBusiness) return
@@ -105,12 +107,16 @@ export default function OpenShiftsPage() {
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
-  const quickSetBranch = async (shift: Shift, branchId: string | undefined) => {
+  const quickSetBranch = async (shift: Shift, branchId: string | undefined, applySeries: boolean) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    const useSeries = applySeries && !!shift.recurringGroupId
     const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: shift.id, branchId: branchId ?? null }),
+      body: JSON.stringify(useSeries
+        ? { groupId: shift.recurringGroupId, branchId: branchId ?? null }
+        : { id: shift.id, branchId: branchId ?? null }
+      ),
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
@@ -118,9 +124,21 @@ export default function OpenShiftsPage() {
       return
     }
     const newBranch = branchId ? branches.find(b => b.id === branchId) : undefined
-    setOpenShifts(prev => prev.map(s => s.id === shift.id ? { ...s, branchId, branch: newBranch } : s))
+    if (useSeries) {
+      let count = 0
+      setOpenShifts(prev => prev.map(s => {
+        if (s.recurringGroupId === shift.recurringGroupId) { count++; return { ...s, branchId, branch: newBranch } }
+        return s
+      }))
+      toast.success(branchId
+        ? `Pobočka ${newBranch?.name} nastavena pro celou sérii (${count}×)`
+        : `Pobočka odebrána z celé série (${count}×)`
+      )
+    } else {
+      setOpenShifts(prev => prev.map(s => s.id === shift.id ? { ...s, branchId, branch: newBranch } : s))
+      toast.success(branchId ? `Přiřazeno: ${newBranch?.name ?? 'pobočka'}` : 'Pobočka odebrána')
+    }
     setBranchPickerFor(null)
-    toast.success(branchId ? `Přiřazeno: ${newBranch?.name ?? 'pobočka'}` : 'Pobočka odebrána')
   }
 
   // Count how many open shifts share a recurring group
@@ -345,7 +363,15 @@ export default function OpenShiftsPage() {
                             {branches.length > 0 && (
                               <div className="relative">
                                 <button
-                                  onClick={() => isManager && setBranchPickerFor(branchPickerFor === shift.id ? null : shift.id)}
+                                  onClick={() => {
+                                    if (!isManager) return
+                                    if (branchPickerFor === shift.id) {
+                                      setBranchPickerFor(null)
+                                    } else {
+                                      setPickerApplySeries(!!shift.recurringGroupId)
+                                      setBranchPickerFor(shift.id)
+                                    }
+                                  }}
                                   disabled={!isManager}
                                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
                                     shift.branch
@@ -356,21 +382,33 @@ export default function OpenShiftsPage() {
                                 >
                                   📍 {shift.branch?.name ?? 'Bez pobočky'}
                                 </button>
-                                {branchPickerFor === shift.id && isManager && (
-                                  <div className="absolute left-0 top-full mt-1 z-30 w-56 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+                                {branchPickerFor === shift.id && isManager && (() => {
+                                  const seriesSize = shift.recurringGroupId
+                                    ? openShifts.filter(s => s.recurringGroupId === shift.recurringGroupId).length
+                                    : 0
+                                  return (
+                                  <div className="absolute left-0 top-full mt-1 z-30 w-64 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
                                     <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                                       <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Pobočka</p>
                                       <button onClick={() => setBranchPickerFor(null)} className="text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
                                     </div>
+                                    {shift.recurringGroupId && (
+                                      <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer px-3 py-2 border-b border-slate-50 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+                                        <input type="checkbox" checked={pickerApplySeries}
+                                          onChange={e => setPickerApplySeries(e.target.checked)}
+                                          className="rounded border-slate-300 text-indigo-600" />
+                                        Celá série {seriesSize > 1 ? <strong>({seriesSize}× mezi volnými)</strong> : null}
+                                      </label>
+                                    )}
                                     <div className="max-h-56 overflow-y-auto py-1">
                                       {shift.branchId && (
-                                        <button onClick={() => quickSetBranch(shift, undefined)}
+                                        <button onClick={() => quickSetBranch(shift, undefined, pickerApplySeries)}
                                           className="w-full text-left text-xs px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
                                           Bez pobočky
                                         </button>
                                       )}
                                       {branches.map(b => (
-                                        <button key={b.id} onClick={() => quickSetBranch(shift, b.id)}
+                                        <button key={b.id} onClick={() => quickSetBranch(shift, b.id, pickerApplySeries)}
                                           className={`w-full flex items-center gap-2 px-3 py-2 transition-colors ${
                                             shift.branchId === b.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
                                           }`}>
@@ -380,7 +418,8 @@ export default function OpenShiftsPage() {
                                       ))}
                                     </div>
                                   </div>
-                                )}
+                                  )
+                                })()}
                               </div>
                             )}
                           </div>

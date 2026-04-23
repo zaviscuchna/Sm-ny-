@@ -468,6 +468,8 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
   const [editEnd,   setEditEnd]   = useState(shift.endTime)
   const [editNotes, setEditNotes] = useState(shift.notes ?? '')
   const [editBranch, setEditBranch] = useState<string>(shift.branchId ?? 'none')
+  // Default: pokud je směna v sérii, quick branch picker aplikuje na celou sérii
+  const [branchApplySeries, setBranchApplySeries] = useState(!!shift.recurringGroupId)
   const [splitTime, setSplitTime] = useState(() => midpointTime(shift.startTime, shift.endTime))
   const accent: Record<string, string> = {
     confirmed: 'border-l-green-400', assigned: 'border-l-blue-400',
@@ -490,7 +492,11 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
     setEditSeriesConfirm(false)
   }
   const quickSetBranch = (branchId: string | undefined) => {
-    onEdit(shift.id, { branchId })
+    if (branchApplySeries && shift.recurringGroupId && onEditSeries) {
+      onEditSeries(shift.recurringGroupId, { branchId })
+    } else {
+      onEdit(shift.id, { branchId })
+    }
     setMode('view')
   }
   return (
@@ -679,7 +685,17 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
           )}
           {mode === 'branch' && (
             <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-2">Přiřadit pobočku:</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Přiřadit pobočku:</p>
+                {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
+                    <input type="checkbox" checked={branchApplySeries}
+                      onChange={e => setBranchApplySeries(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600" />
+                    <span>Celá série <strong>({seriesCount}×)</strong></span>
+                  </label>
+                )}
+              </div>
               <div className="space-y-1">
                 {shift.branchId && (
                   <button onClick={() => quickSetBranch(undefined)}
@@ -721,6 +737,8 @@ function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEd
   const [editNotes, setEditNotes] = useState(shift.notes ?? '')
   const [editBranch, setEditBranch] = useState<string>(shift.branchId ?? 'none')
   const [editSeries, setEditSeries] = useState(false)
+  // Default: pokud je v sérii, quick branch picker aplikuje na celou sérii
+  const [branchApplySeries, setBranchApplySeries] = useState(!!shift.recurringGroupId)
 
   const closePopovers = () => { setShowAssign(false); setShowSplit(false); setShowEditForm(false); setDeleteConfirm(false); setShowBranch(false) }
   const openEdit = () => {
@@ -746,7 +764,11 @@ function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEd
     setShowEditForm(false)
   }
   const quickSetBranch = (branchId: string | undefined) => {
-    onEdit(shift.id, { branchId })
+    if (branchApplySeries && shift.recurringGroupId && onEditSeries) {
+      onEditSeries(shift.recurringGroupId, { branchId })
+    } else {
+      onEdit(shift.id, { branchId })
+    }
     setShowBranch(false)
   }
 
@@ -864,6 +886,14 @@ function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEd
           <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
             <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Pobočka</p>
           </div>
+          {shift.recurringGroupId && seriesCount && seriesCount > 1 && (
+            <label className="flex items-center gap-1.5 text-[10px] text-slate-600 dark:text-slate-400 cursor-pointer px-3 py-1.5 border-b border-slate-50 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+              <input type="checkbox" checked={branchApplySeries}
+                onChange={e => setBranchApplySeries(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600" />
+              Celá série <strong>({seriesCount}×)</strong>
+            </label>
+          )}
           <div className="max-h-48 overflow-y-auto py-1">
             {shift.branchId && (
               <button onClick={() => quickSetBranch(undefined)}
