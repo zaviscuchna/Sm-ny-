@@ -12,7 +12,7 @@ import { getLogsForEmployee, saveLogToDB, deleteLogFromDB, getShiftsForBusiness,
 import { safeFetchArray } from '@/lib/safe-fetch'
 import type { WorkLog } from '@/lib/work-logs'
 import type { Shift } from '@/types'
-import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight, Handshake, ArrowRightLeft, X as XIcon } from 'lucide-react'
+import { Calendar, Clock, CheckCircle2, UserPlus, Star, ClipboardList, Plus, Trash2, ChevronLeft, ChevronRight, Handshake, ArrowRightLeft, X as XIcon, Split as SplitIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { toast } from 'sonner'
@@ -33,6 +33,21 @@ interface SwapRequest {
 }
 
 interface Colleague { id: string; name: string; color: string; email: string }
+
+interface SplitProposal {
+  id: string
+  shiftId: string
+  fromUserId: string
+  toUserId: string
+  splitTime: string
+  proposerHalf: 'first' | 'second'
+  message?: string
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled'
+  createdAt: string
+  shift?: { id: string; date: string; startTime: string; endTime: string; roleNeeded: string; branchId?: string | null; branchName?: string | null }
+  fromUser: { id: string; name: string; color: string }
+  toUser:   { id: string; name: string; color: string }
+}
 
 function getDuration(start: string, end: string) {
   const [sh, sm] = start.split(':').map(Number)
@@ -71,6 +86,7 @@ export default function MyShiftsPage() {
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
   const [confirmedShifts, setConfirmedShifts] = useState<Set<string>>(new Set())
   const [swaps, setSwaps] = useState<SwapRequest[]>([])
+  const [splitProposals, setSplitProposals] = useState<SplitProposal[]>([])
   const [colleagues, setColleagues] = useState<Colleague[]>([])
   const [swapDialog, setSwapDialog] = useState<{ myShift: Shift } | null>(null)
   const [swapPickedUserId, setSwapPickedUserId] = useState<string>('')
@@ -89,6 +105,27 @@ export default function MyShiftsPage() {
   const loadSwaps = () => {
     if (!activeBusiness || !user || !isRegistered(activeBusiness.id)) return
     safeFetchArray<SwapRequest>(`/api/shift-swaps?status=pending`).then(setSwaps)
+    safeFetchArray<SplitProposal>(`/api/shift-split-proposals?status=pending`).then(setSplitProposals)
+  }
+
+  const handleSplitAction = async (proposalId: string, action: 'accept' | 'reject') => {
+    const res = await fetch(`/api/shift-split-proposals?id=${proposalId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      toast.error(data.error ?? 'Chyba')
+      return
+    }
+    toast.success(action === 'accept' ? 'Směna rozdělena — kolega má svoji půlku' : 'Návrh odmítnut')
+    // Reload — split accept vytváří novou směnu, musíme refresh
+    setSplitProposals(prev => prev.filter(p => p.id !== proposalId))
+    if (action === 'accept' && activeBusiness && user && isRegistered(activeBusiness.id)) {
+      safeFetchArray<Shift>(`/api/shifts?bizId=${activeBusiness.id}&employeeId=${user.id}`).then(setMyShiftsRaw)
+      safeFetchArray<Shift>(`/api/shifts?bizId=${activeBusiness.id}`).then(setAllBizShifts)
+    }
   }
 
   // Load existing applications from DB
@@ -306,6 +343,88 @@ export default function MyShiftsPage() {
             </div>
           ))}
         </div>
+
+        {/* Split proposals */}
+        {splitProposals.length > 0 && (
+          <section>
+            <h2 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+              <SplitIcon className="w-4 h-4 text-indigo-500" />
+              Návrhy rozdělení ({splitProposals.length})
+            </h2>
+            <div className="space-y-2">
+              {splitProposals.map(p => {
+                const isIncoming = p.toUserId === user?.id
+                const them = isIncoming ? p.fromUser : p.toUser
+                if (!p.shift) return null
+                const keepStart = p.proposerHalf === 'first' ? p.splitTime       : p.shift.startTime
+                const keepEnd   = p.proposerHalf === 'first' ? p.shift.endTime   : p.splitTime
+                const gotStart  = p.proposerHalf === 'first' ? p.shift.startTime : p.splitTime
+                const gotEnd    = p.proposerHalf === 'first' ? p.splitTime       : p.shift.endTime
+                return (
+                  <div key={p.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-indigo-100 dark:border-indigo-900/40 shadow-sm p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <UserAvatar name={them.name} color={them.color} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          {isIncoming ? `${them.name} navrhuje rozdělení tvé směny` : `Navrhl/as rozdělení směny ${them.name}`}
+                        </p>
+                        {p.message && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 italic mt-0.5">&ldquo;{p.message}&rdquo;</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 space-y-2">
+                      <div>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase mb-0.5">Původní směna</p>
+                        <p className="font-semibold text-slate-800 dark:text-slate-200">{p.shift.roleNeeded}</p>
+                        <p className="text-slate-500 dark:text-slate-400">
+                          {format(parseISO(p.shift.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })} · {p.shift.startTime}–{p.shift.endTime}
+                        </p>
+                        {p.shift.branchName && <p className="text-[11px] text-indigo-500">📍 {p.shift.branchName}</p>}
+                      </div>
+                      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center pt-2 border-t border-slate-100 dark:border-slate-700">
+                        <div>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase">{isIncoming ? 'Ty si necháš' : `${them.name} si nechá`}</p>
+                          <p className="font-semibold text-slate-800 dark:text-slate-200">{keepStart}–{keepEnd}</p>
+                        </div>
+                        <SplitIcon className="w-5 h-5 text-indigo-400" />
+                        <div className="text-right">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase">{isIncoming ? `${them.name} dostane` : 'Ty dostaneš'}</p>
+                          <p className="font-semibold text-slate-800 dark:text-slate-200">{gotStart}–{gotEnd}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-3 justify-end">
+                      {isIncoming ? (
+                        <>
+                          <button
+                            onClick={() => handleSplitAction(p.id, 'reject')}
+                            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Odmítnout
+                          </button>
+                          <button
+                            onClick={() => handleSplitAction(p.id, 'accept')}
+                            className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors"
+                          >
+                            Rozdělit
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleSplitAction(p.id, 'reject')}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          Zrušit návrh
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Swap requests */}
         {swaps.length > 0 && (
