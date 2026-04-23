@@ -10,7 +10,7 @@ import { ShiftStatusBadge } from '@/components/shared/ShiftStatusBadge'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { NewShiftDialog } from '@/components/shifts/NewShiftDialog'
 import { getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
-import type { Shift, User } from '@/types'
+import type { Shift, User, Branch } from '@/types'
 import { ChevronLeft, ChevronRight, Clock, User as UserIcon, Plus, Trash2, UserCheck, Pencil, Check, X, Split } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -32,9 +32,25 @@ const STATUS_COLORS: Record<string, string> = {
   open:      'border-l-red-300 bg-red-50 dark:bg-red-900/20',
 }
 
+// 6 palet pro pobočky — deterministicky přiřazené podle hashe branch.id, ať má
+// každá pobočka konzistentní barvu napříč aplikací.
+const BRANCH_PALETTES = [
+  'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900/60',
+  'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/60',
+  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60',
+  'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300 hover:bg-pink-200 dark:hover:bg-pink-900/60',
+  'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60',
+  'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-900/60',
+]
+function branchColorClasses(branchId: string): string {
+  let hash = 0
+  for (let i = 0; i < branchId.length; i++) hash = (hash * 31 + branchId.charCodeAt(i)) >>> 0
+  return BRANCH_PALETTES[hash % BRANCH_PALETTES.length]
+}
+
 export default function ShiftsPage() {
   const { user, activeBusiness } = useAuth()
-  const { activeBranch } = useBranch()
+  const { activeBranch, branches } = useBranch()
   const [weekOffset, setWeekOffset]       = useState(0)
   const [dbShifts,   setDbShifts]         = useState<Shift[]>([])
   const [extraShifts, setExtraShifts]     = useState<Shift[]>([])
@@ -110,19 +126,28 @@ export default function ShiftsPage() {
     toast.success(employee ? `Přiřazen/a: ${employee.name}` : 'Přiřazení zrušeno')
   }
 
-  const handleEditShift = async (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'>>) => {
+  const handleEditShift = async (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'|'branchId'>>) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    // API očekává branchId jako null pro "bez pobočky", nikoliv undefined
+    const payload: Record<string, unknown> = { id: shiftId, ...fields }
+    if ('branchId' in fields && fields.branchId === undefined) payload.branchId = null
     const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: shiftId, ...fields }),
+      body: JSON.stringify(payload),
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       toast.error(data.error ?? 'Chyba při úpravě směny')
       return
     }
-    const update = (s: Shift) => s.id === shiftId ? { ...s, ...fields } : s
+    // Při změně pobočky potřebujeme i její metadata (name, address) pro badge
+    const newBranch = 'branchId' in fields
+      ? (fields.branchId ? branches.find(b => b.id === fields.branchId) : undefined)
+      : undefined
+    const update = (s: Shift) => s.id === shiftId
+      ? { ...s, ...fields, ...('branchId' in fields ? { branch: newBranch } : {}) }
+      : s
     setDbShifts(prev => prev.map(update))
     setExtraShifts(prev => prev.map(update))
     toast.success('Směna upravena')
@@ -154,19 +179,26 @@ export default function ShiftsPage() {
     toast.success('Celá série smazána')
   }
 
-  const handleEditSeries = async (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => {
+  const handleEditSeries = async (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'|'branchId'>>) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    const payload: Record<string, unknown> = { groupId, ...fields }
+    if ('branchId' in fields && fields.branchId === undefined) payload.branchId = null
     const res = await fetch('/api/shifts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ groupId, ...fields }),
+      body: JSON.stringify(payload),
     })
     if (!res.ok) {
       const data = await res.json().catch(() => ({}))
       toast.error(data.error ?? 'Chyba při úpravě série')
       return
     }
-    const update = (s: Shift) => s.recurringGroupId === groupId ? { ...s, ...fields } : s
+    const newBranch = 'branchId' in fields
+      ? (fields.branchId ? branches.find(b => b.id === fields.branchId) : undefined)
+      : undefined
+    const update = (s: Shift) => s.recurringGroupId === groupId
+      ? { ...s, ...fields, ...('branchId' in fields ? { branch: newBranch } : {}) }
+      : s
     setDbShifts(prev => prev.map(update))
     setExtraShifts(prev => prev.map(update))
     toast.success('Celá série upravena')
@@ -317,7 +349,7 @@ export default function ShiftsPage() {
           ) : (
             <>
               {selectedDayShifts.map(shift => (
-                <MobileShiftCard key={shift.id} shift={shift} employees={employees}
+                <MobileShiftCard key={shift.id} shift={shift} employees={employees} branches={branches}
                   onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
                   onSplit={handleSplitShift}
                   onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
@@ -371,7 +403,7 @@ export default function ShiftsPage() {
                   ) : (
                     <>
                       {dayShifts.map(shift => (
-                    <DesktopShiftCard key={shift.id} shift={shift} employees={employees}
+                    <DesktopShiftCard key={shift.id} shift={shift} employees={employees} branches={branches}
                       onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
                       onSplit={handleSplitShift}
                       onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
@@ -403,12 +435,13 @@ export default function ShiftsPage() {
 interface CardProps {
   shift: Shift
   employees: User[]
+  branches: Branch[]
   onAssign: (shiftId: string, employee: User | null) => void
   onDelete: (shiftId: string) => void
-  onEdit:   (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'>>) => void
+  onEdit:   (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'|'branchId'>>) => void
   onSplit:  (shiftId: string, splitTime: string) => void
   onDeleteSeries?: (groupId: string) => void
-  onEditSeries?:   (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'>>) => void
+  onEditSeries?:   (groupId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'notes'|'branchId'>>) => void
   seriesCount?: number
   similarCount?: number
   onDeleteSimilar?: () => void
@@ -426,21 +459,28 @@ function midpointTime(start: string, end: string): string {
 
 // ── Mobile shift card ────────────────────────────────────────────────────────
 
-function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
-  const [mode, setMode] = useState<'view'|'assign'|'edit'|'split'>('view')
+function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+  const [mode, setMode] = useState<'view'|'assign'|'edit'|'split'|'branch'>('view')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
   const [editRole,  setEditRole]  = useState(shift.roleNeeded)
   const [editStart, setEditStart] = useState(shift.startTime)
   const [editEnd,   setEditEnd]   = useState(shift.endTime)
   const [editNotes, setEditNotes] = useState(shift.notes ?? '')
+  const [editBranch, setEditBranch] = useState<string>(shift.branchId ?? 'none')
   const [splitTime, setSplitTime] = useState(() => midpointTime(shift.startTime, shift.endTime))
   const accent: Record<string, string> = {
     confirmed: 'border-l-green-400', assigned: 'border-l-blue-400',
     pending: 'border-l-amber-400',   open: 'border-l-red-400',
   }
   const saveEdit = () => {
-    const fields = { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined }
+    const fields = {
+      roleNeeded: editRole,
+      startTime: editStart,
+      endTime: editEnd,
+      notes: editNotes || undefined,
+      branchId: editBranch === 'none' ? undefined : editBranch,
+    }
     if (editSeriesConfirm && shift.recurringGroupId) {
       onEditSeries?.(shift.recurringGroupId, fields)
     } else {
@@ -448,6 +488,10 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit
     }
     setMode('view')
     setEditSeriesConfirm(false)
+  }
+  const quickSetBranch = (branchId: string | undefined) => {
+    onEdit(shift.id, { branchId })
+    setMode('view')
   }
   return (
     <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 border-l-4 ${accent[shift.status] ?? 'border-l-slate-200'} shadow-sm p-4`}>
@@ -469,6 +513,16 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit
           </div>
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
             className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          {branches.length > 0 && (
+            <div>
+              <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Pobočka</label>
+              <select value={editBranch} onChange={e => setEditBranch(e.target.value)}
+                className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                <option value="none">Bez pobočky</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}{b.address ? ` · ${b.address}` : ''}</option>)}
+              </select>
+            </div>
+          )}
           {shift.recurringGroupId && (
             <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
               <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
@@ -490,11 +544,24 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-0.5">{shift.roleNeeded}</p>
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-2">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-2 flex-wrap">
                 <Clock className="w-3 h-3 text-slate-400 dark:text-slate-500" />
                 {shift.startTime} – {shift.endTime}
                 <span className="text-slate-300 dark:text-slate-600">·</span>
                 <span className="font-medium text-slate-600 dark:text-slate-400">{getDuration(shift.startTime, shift.endTime)}</span>
+                {branches.length > 0 && (
+                  <button
+                    onClick={() => setMode(mode === 'branch' ? 'view' : 'branch')}
+                    className={`ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${
+                      shift.branch
+                        ? branchColorClasses(shift.branch.id)
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+                    }`}
+                    title={shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku'}
+                  >
+                    {shift.branch?.name ?? 'Bez pobočky'}
+                  </button>
+                )}
               </div>
               {shift.assignedEmployee ? (
                 <div className="flex items-center gap-2">
@@ -522,7 +589,7 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit
                   className="p-1.5 rounded-lg text-slate-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
                   <Split className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => { setEditRole(shift.roleNeeded); setEditStart(shift.startTime); setEditEnd(shift.endTime); setEditNotes(shift.notes ?? ''); setMode('edit') }}
+                <button onClick={() => { setEditRole(shift.roleNeeded); setEditStart(shift.startTime); setEditEnd(shift.endTime); setEditNotes(shift.notes ?? ''); setEditBranch(shift.branchId ?? 'none'); setMode('edit') }}
                   title="Upravit směnu" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -610,6 +677,29 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit
               </div>
             </div>
           )}
+          {mode === 'branch' && (
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-2">Přiřadit pobočku:</p>
+              <div className="space-y-1">
+                {shift.branchId && (
+                  <button onClick={() => quickSetBranch(undefined)}
+                    className="w-full text-left text-xs px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
+                    Bez pobočky
+                  </button>
+                )}
+                {branches.map(b => (
+                  <button key={b.id} onClick={() => quickSetBranch(b.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+                      shift.branchId === b.id ? 'bg-indigo-50 dark:bg-indigo-900/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}>
+                    <span className={`w-2 h-2 rounded-full ${branchColorClasses(b.id).split(' ')[0]}`} />
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex-1 text-left truncate">{b.name}</span>
+                    {b.address && <span className="text-[10px] text-slate-400 truncate">{b.address}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -618,33 +708,46 @@ function MobileShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit
 
 // ── Desktop shift card ────────────────────────────────────────────────────────
 
-function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
   const [showAssign, setShowAssign] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
   const [showSplit, setShowSplit] = useState(false)
+  const [showBranch, setShowBranch] = useState(false)
   const [splitTime, setSplitTime] = useState(() => midpointTime(shift.startTime, shift.endTime))
   const [editRole,  setEditRole]  = useState(shift.roleNeeded)
   const [editStart, setEditStart] = useState(shift.startTime)
   const [editEnd,   setEditEnd]   = useState(shift.endTime)
   const [editNotes, setEditNotes] = useState(shift.notes ?? '')
+  const [editBranch, setEditBranch] = useState<string>(shift.branchId ?? 'none')
   const [editSeries, setEditSeries] = useState(false)
 
+  const closePopovers = () => { setShowAssign(false); setShowSplit(false); setShowEditForm(false); setDeleteConfirm(false); setShowBranch(false) }
   const openEdit = () => {
     setEditRole(shift.roleNeeded); setEditStart(shift.startTime)
     setEditEnd(shift.endTime); setEditNotes(shift.notes ?? '')
-    setEditSeries(false); setShowEditForm(true)
-    setDeleteConfirm(false); setShowAssign(false); setShowSplit(false)
+    setEditBranch(shift.branchId ?? 'none')
+    setEditSeries(false); closePopovers(); setShowEditForm(true)
   }
   const openSplit = () => {
     setSplitTime(midpointTime(shift.startTime, shift.endTime))
-    setShowSplit(true); setShowAssign(false); setShowEditForm(false); setDeleteConfirm(false)
+    closePopovers(); setShowSplit(true)
   }
   const saveEdit = () => {
-    const fields = { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined }
+    const fields = {
+      roleNeeded: editRole,
+      startTime: editStart,
+      endTime: editEnd,
+      notes: editNotes || undefined,
+      branchId: editBranch === 'none' ? undefined : editBranch,
+    }
     if (editSeries && shift.recurringGroupId) onEditSeries?.(shift.recurringGroupId, fields)
     else onEdit(shift.id, fields)
     setShowEditForm(false)
+  }
+  const quickSetBranch = (branchId: string | undefined) => {
+    onEdit(shift.id, { branchId })
+    setShowBranch(false)
   }
 
   return (
@@ -656,7 +759,20 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSpli
           <span className="font-normal text-slate-400 dark:text-slate-500 ml-1">({getDuration(shift.startTime, shift.endTime)})</span>
         </span>
       </div>
-      <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 truncate mb-1.5">{shift.roleNeeded}</p>
+      <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 truncate">{shift.roleNeeded}</p>
+      {branches.length > 0 && (
+        <button
+          onClick={() => { closePopovers(); setShowBranch(v => !v) }}
+          className={`w-full mt-1 mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold truncate text-left transition-colors ${
+            shift.branch
+              ? branchColorClasses(shift.branch.id)
+              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+          }`}
+          title={shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku'}
+        >
+          {shift.branch?.name ?? '+ pobočka'}
+        </button>
+      )}
       {shift.assignedEmployee ? (
         <div className="flex items-center gap-1">
           <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
@@ -743,6 +859,30 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSpli
           </div>
         </div>
       )}
+      {showBranch && (
+        <div className="absolute top-full left-0 z-30 mt-1 w-52 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+            <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Pobočka</p>
+          </div>
+          <div className="max-h-48 overflow-y-auto py-1">
+            {shift.branchId && (
+              <button onClick={() => quickSetBranch(undefined)}
+                className="w-full text-left text-[11px] px-3 py-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
+                Bez pobočky
+              </button>
+            )}
+            {branches.map(b => (
+              <button key={b.id} onClick={() => quickSetBranch(b.id)}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 transition-colors ${
+                  shift.branchId === b.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${branchColorClasses(b.id).split(' ')[0]}`} />
+                <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">{b.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {showEditForm && (
         <div className="absolute top-full left-0 z-20 mt-1 w-64 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl p-3 space-y-2">
           <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">Upravit směnu</p>
@@ -762,6 +902,13 @@ function DesktopShiftCard({ shift, employees, onAssign, onDelete, onEdit, onSpli
           </div>
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Poznámka (nepovinné)"
             className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          {branches.length > 0 && (
+            <select value={editBranch} onChange={e => setEditBranch(e.target.value)}
+              className="w-full text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+              <option value="none">Bez pobočky</option>
+              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          )}
           {shift.recurringGroupId && seriesCount && (
             <label className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer">
               <input type="checkbox" checked={editSeries} onChange={e => setEditSeries(e.target.checked)}

@@ -23,14 +23,30 @@ function getDuration(start: string, end: string) {
   return `${(eh + em / 60) - (sh + sm / 60)}h`
 }
 
+// 6 palet pro pobočky — stejný algoritmus jako v shifts/page.tsx
+const BRANCH_PALETTES = [
+  'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-900/60',
+  'bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-900/60',
+  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/60',
+  'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300 hover:bg-pink-200 dark:hover:bg-pink-900/60',
+  'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/60',
+  'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-900/60',
+]
+function branchColorClasses(branchId: string): string {
+  let hash = 0
+  for (let i = 0; i < branchId.length; i++) hash = (hash * 31 + branchId.charCodeAt(i)) >>> 0
+  return BRANCH_PALETTES[hash % BRANCH_PALETTES.length]
+}
+
 export default function OpenShiftsPage() {
   const { user, activeBusiness } = useAuth()
-  const { activeBranch } = useBranch()
+  const { activeBranch, branches } = useBranch()
   const isManager = user?.role === 'manager'
 
   const [openShifts, setOpenShifts] = useState<Shift[]>([])
   const [apps, setApps] = useState<ShiftApplication[]>([])
   const [appliedShifts, setAppliedShifts] = useState<Set<string>>(new Set())
+  const [branchPickerFor, setBranchPickerFor] = useState<string | null>(null)
 
   useEffect(() => {
     if (!activeBusiness) return
@@ -69,8 +85,27 @@ export default function OpenShiftsPage() {
   const [editStart, setEditStart] = useState('')
   const [editEnd, setEditEnd] = useState('')
   const [editNotes, setEditNotes] = useState('')
+  const [editBranch, setEditBranch] = useState<string>('none')
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  const quickSetBranch = async (shift: Shift, branchId: string | undefined) => {
+    if (!activeBusiness || !isRegistered(activeBusiness.id)) return
+    const res = await fetch('/api/shifts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: shift.id, branchId: branchId ?? null }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error ?? 'Chyba při změně pobočky')
+      return
+    }
+    const newBranch = branchId ? branches.find(b => b.id === branchId) : undefined
+    setOpenShifts(prev => prev.map(s => s.id === shift.id ? { ...s, branchId, branch: newBranch } : s))
+    setBranchPickerFor(null)
+    toast.success(branchId ? `Přiřazeno: ${newBranch?.name ?? 'pobočka'}` : 'Pobočka odebrána')
+  }
 
   // Count how many open shifts share a recurring group
   const groupCounts = openShifts.reduce<Record<string, number>>((acc, s) => {
@@ -189,13 +224,20 @@ export default function OpenShiftsPage() {
     setEditStart(shift.startTime)
     setEditEnd(shift.endTime)
     setEditNotes(shift.notes ?? '')
+    setEditBranch(shift.branchId ?? 'none')
     setEditSeriesConfirm(false)
     setDeleteConfirm(null)
     setExpandedShift(null)
   }
 
   const saveEdit = async (shift: Shift) => {
-    const fields = { roleNeeded: editRole, startTime: editStart, endTime: editEnd, notes: editNotes || undefined }
+    const fields = {
+      roleNeeded: editRole,
+      startTime: editStart,
+      endTime: editEnd,
+      notes: editNotes || undefined,
+      branchId: editBranch === 'none' ? null : editBranch,
+    }
     if (activeBusiness && isRegistered(activeBusiness.id)) {
       await fetch('/api/shifts', {
         method: 'PATCH',
@@ -205,11 +247,13 @@ export default function OpenShiftsPage() {
           : { id: shift.id, ...fields }),
       })
     }
+    const newBranch = editBranch !== 'none' ? branches.find(b => b.id === editBranch) : undefined
+    const patch = { ...fields, branchId: editBranch === 'none' ? undefined : editBranch, branch: newBranch }
     if (editSeriesConfirm && shift.recurringGroupId) {
-      setOpenShifts(prev => prev.map(s => s.recurringGroupId === shift.recurringGroupId ? { ...s, ...fields } : s))
+      setOpenShifts(prev => prev.map(s => s.recurringGroupId === shift.recurringGroupId ? { ...s, ...patch } : s))
       toast.success('Celá série upravena')
     } else {
-      setOpenShifts(prev => prev.map(s => s.id === shift.id ? { ...s, ...fields } : s))
+      setOpenShifts(prev => prev.map(s => s.id === shift.id ? { ...s, ...patch } : s))
       toast.success('Směna upravena')
     }
     setEditingShift(null)
@@ -279,8 +323,51 @@ export default function OpenShiftsPage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 flex-wrap">
-                        <div>
-                          <p className="font-bold text-slate-900 dark:text-slate-100">{shift.roleNeeded}</p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-slate-900 dark:text-slate-100">{shift.roleNeeded}</p>
+                            {branches.length > 0 && (
+                              <div className="relative">
+                                <button
+                                  onClick={() => isManager && setBranchPickerFor(branchPickerFor === shift.id ? null : shift.id)}
+                                  disabled={!isManager}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition-colors ${
+                                    shift.branch
+                                      ? branchColorClasses(shift.branch.id) + (isManager ? ' cursor-pointer' : '')
+                                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 ' + (isManager ? 'hover:bg-amber-200 dark:hover:bg-amber-900/60 cursor-pointer' : '')
+                                  } ${!isManager ? 'cursor-default' : ''}`}
+                                  title={isManager ? (shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku') : undefined}
+                                >
+                                  📍 {shift.branch?.name ?? 'Bez pobočky'}
+                                </button>
+                                {branchPickerFor === shift.id && isManager && (
+                                  <div className="absolute left-0 top-full mt-1 z-30 w-56 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl overflow-hidden">
+                                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Pobočka</p>
+                                      <button onClick={() => setBranchPickerFor(null)} className="text-slate-400 hover:text-slate-600"><X className="w-3 h-3" /></button>
+                                    </div>
+                                    <div className="max-h-56 overflow-y-auto py-1">
+                                      {shift.branchId && (
+                                        <button onClick={() => quickSetBranch(shift, undefined)}
+                                          className="w-full text-left text-xs px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
+                                          Bez pobočky
+                                        </button>
+                                      )}
+                                      {branches.map(b => (
+                                        <button key={b.id} onClick={() => quickSetBranch(shift, b.id)}
+                                          className={`w-full flex items-center gap-2 px-3 py-2 transition-colors ${
+                                            shift.branchId === b.id ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                                          }`}>
+                                          <span className={`w-2 h-2 rounded-full ${branchColorClasses(b.id).split(' ')[0]}`} />
+                                          <span className="text-xs font-medium text-slate-700 dark:text-slate-300 flex-1 text-left truncate">{b.name}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -443,6 +530,16 @@ export default function OpenShiftsPage() {
                             className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300" />
                         </div>
                       </div>
+                      {branches.length > 0 && (
+                        <div>
+                          <label className="text-[11px] text-slate-400 dark:text-slate-500 block mb-1">Pobočka</label>
+                          <select value={editBranch} onChange={e => setEditBranch(e.target.value)}
+                            className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                            <option value="none">Bez pobočky</option>
+                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}{b.address ? ` · ${b.address}` : ''}</option>)}
+                          </select>
+                        </div>
+                      )}
                       {shift.recurringGroupId && (
                         <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer">
                           <input type="checkbox" checked={editSeriesConfirm} onChange={e => setEditSeriesConfirm(e.target.checked)}
