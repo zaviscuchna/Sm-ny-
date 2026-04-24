@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Úklid směn — návod pro manažera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:       #f7f5f1;
+  --surface:  #ffffff;
+  --surface2: #efece5;
+  --primary:  #2b4a3e;
+  --primary-l: #3d6752;
+  --accent:   #b06b2f;
+  --danger:   #a03e2b;
+  --ok:       #3d6752;
+  --text:     #1a1a1a;
+  --muted:    #6b6b65;
+  --border:   rgba(43,74,62,0.12);
+  --ff-d:     'Playfair Display', Georgia, serif;
+  --ff-b:     'Inter', system-ui, sans-serif;
+}
+html{-webkit-font-smoothing:antialiased;scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--ff-b);
+  font-size:clamp(.95rem, 1.1vw, 1.05rem);
+  line-height:1.65;
+}
+
+/* ── CONTAINER ─────────────────────────────────────────────── */
+.wrap{
+  max-width:760px;margin:0 auto;
+  padding:clamp(2rem,5vw,4rem) clamp(1.2rem,4vw,2.5rem);
+}
+
+/* ── HEADER ────────────────────────────────────────────────── */
+header{
+  border-bottom:1px solid var(--border);
+  padding-bottom:2rem;margin-bottom:2.5rem;
+}
+.kicker{
+  display:inline-block;
+  font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--primary);font-weight:600;
+  padding:.35rem .8rem;background:var(--surface2);
+  border-radius:2rem;
+}
+h1{
+  font-family:var(--ff-d);font-weight:700;
+  font-size:clamp(1.8rem,4vw,2.6rem);
+  line-height:1.1;letter-spacing:-.02em;
+  color:var(--primary);margin:1rem 0 .6rem;
+}
+.subtitle{
+  color:var(--muted);font-size:1.05rem;
+  max-width:60ch;
+}
+
+/* ── INFO BOX ──────────────────────────────────────────────── */
+.info{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-left:4px solid var(--primary);
+  padding:1.2rem 1.4rem;border-radius:0 12px 12px 0;
+  margin-bottom:2rem;
+}
+.info-title{font-weight:600;color:var(--primary);font-size:.92rem;margin-bottom:.4rem}
+.info ul{list-style:none;font-size:.92rem}
+.info li{padding:.2rem 0 .2rem 1.3rem;position:relative;color:var(--text)}
+.info li::before{
+  content:"✓";position:absolute;left:0;
+  color:var(--ok);font-weight:700;
+}
+
+/* ── STEP ──────────────────────────────────────────────────── */
+.step{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:clamp(1.4rem,3vw,2rem);
+  margin-bottom:1.5rem;
+  position:relative;
+}
+.step-num{
+  position:absolute;
+  top:-16px;left:24px;
+  background:var(--primary);color:var(--bg);
+  width:36px;height:36px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:1rem;font-family:var(--ff-d);
+  box-shadow:0 4px 12px rgba(43,74,62,.2);
+}
+.step h2{
+  font-family:var(--ff-d);font-weight:700;
+  font-size:clamp(1.3rem,2.2vw,1.6rem);
+  color:var(--primary);margin:.2rem 0 .3rem;
+}
+.step-purpose{
+  color:var(--muted);font-size:.92rem;
+  padding-bottom:1rem;border-bottom:1px dashed var(--border);
+  margin-bottom:1.2rem;font-style:italic;
+}
+.step ol{
+  list-style:none;counter-reset:sub;padding-left:0;
+}
+.step ol li{
+  counter-increment:sub;
+  padding:.7rem 0 .7rem 2rem;position:relative;
+  border-bottom:1px solid rgba(43,74,62,.06);
+  font-size:.95rem;line-height:1.55;
+}
+.step ol li:last-child{border-bottom:none}
+.step ol li::before{
+  content:counter(sub);
+  position:absolute;left:0;top:.75rem;
+  width:20px;height:20px;border-radius:50%;
+  background:var(--surface2);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;
+  font-size:.75rem;font-weight:600;
+}
+.step ol li strong{color:var(--primary-l);font-weight:600}
+code.kbd{
+  background:var(--surface2);
+  padding:.1rem .45rem;border-radius:4px;
+  font-size:.85em;font-family:'SF Mono',Monaco,monospace;
+  color:var(--primary);font-weight:500;
+}
+.result{
+  margin-top:1.2rem;padding:.9rem 1.1rem;
+  background:rgba(61,103,82,.08);
+  border-left:3px solid var(--ok);
+  border-radius:0 10px 10px 0;
+  font-size:.88rem;color:var(--text);
+}
+.result strong{color:var(--ok);font-weight:600}
+
+/* ── WARN ──────────────────────────────────────────────────── */
+.warn-box{
+  background:rgba(176,107,47,.08);
+  border:1px solid rgba(176,107,47,.2);
+  border-left:4px solid var(--accent);
+  padding:1.1rem 1.4rem;
+  border-radius:0 12px 12px 0;
+  margin-bottom:1.5rem;
+  font-size:.9rem;
+}
+.warn-title{font-weight:600;color:var(--accent);margin-bottom:.3rem;font-size:.85rem;letter-spacing:.02em;text-transform:uppercase}
+
+/* ── FINAL ─────────────────────────────────────────────────── */
+.final{
+  background:var(--primary);color:var(--bg);
+  border-radius:20px;
+  padding:clamp(1.5rem,3vw,2.2rem);
+  margin-top:2rem;
+}
+.final h2{
+  font-family:var(--ff-d);color:var(--bg);
+  margin-bottom:.8rem;font-size:1.4rem;
+}
+.final p{color:rgba(247,245,241,.9);font-size:.95rem;line-height:1.6}
+.final .msg{
+  margin-top:1rem;padding:1.1rem 1.3rem;
+  background:rgba(247,245,241,.1);
+  border-left:3px solid var(--accent);
+  border-radius:0 10px 10px 0;
+  font-style:italic;font-size:.92rem;
+}
+
+/* ── FOOTER ────────────────────────────────────────────────── */
+footer{
+  text-align:center;margin-top:3rem;padding-top:2rem;
+  border-top:1px solid var(--border);
+  color:var(--muted);font-size:.8rem;
+}
+
+@media print{
+  body{background:#fff}
+  .step{break-inside:avoid;page-break-inside:avoid}
+  .final{background:#f5f2ec;color:var(--text)}
+  .final h2,.final p{color:var(--text)}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ── HEADER ────────────────────────────────────────────── -->
+  <header>
+    <span class="kicker">Směny organizátor · návod</span>
+    <h1>Úklid směn<br>krok za krokem</h1>
+    <p class="subtitle">
+      Tenhle návod ti projde co přesně klikat, aby ses dostal do čistého stavu: Tomáš odhlášený z budoucích směn, pobočky správně přiřazené, zaměstnanci připraveni se přihlásit na volné směny.
+    </p>
+  </header>
+
+  <!-- ── PŘEDPOKLADY ───────────────────────────────────────── -->
+  <div class="info">
+    <div class="info-title">Než začneš</div>
+    <ul>
+      <li>Přihlášený jako <strong>manažer</strong> (vpravo nahoře vidíš svoje jméno s rolí „Manažer")</li>
+      <li>Máš 2 pobočky: <strong>Tábor</strong> a <strong>Jindřichův Hradec</strong></li>
+      <li>Potřebuješ na to cca <strong>15 minut</strong></li>
+      <li>Žádná akce v tomhle návodu <strong>nemaže data</strong> — všechno je vratné</li>
+    </ul>
+  </div>
+
+  <!-- ── KROK 1 ────────────────────────────────────────────── -->
+  <div class="step">
+    <div class="step-num">1</div>
+    <h2>Odhlásit Tomáše z budoucích směn</h2>
+    <p class="step-purpose">Tomáš si vzal všechny opakované směny až do konce roku. Hromadně je uvolníme, aby si je mohl vzít kdokoliv jiný.</p>
+    <ol>
+      <li>V levém menu klikni na <code class="kbd">Zaměstnanci</code></li>
+      <li>Najdi v seznamu <strong>Tomáš Skála</strong> a klikni na jeho řádek — rozbalí se detail</li>
+      <li>Sjeď dolů k sekci <strong>„Nadcházející směny (XXX)"</strong></li>
+      <li>Vpravo nahoře uvidíš červené tlačítko <code class="kbd">Odhlásit hromadně</code> — klikni</li>
+      <li>Vyplň formulář:
+        <br>• <strong>Od:</strong> <code class="kbd">27.04.2026</code>
+        <br>• <strong>Do:</strong> nech prázdné (= do konce všech jeho budoucích směn)
+        <br>• <em>Volitelně:</em> vyber konkrétní sérii z dropdownu, pokud chceš uvolnit jen jednu
+      </li>
+      <li>Klikni <code class="kbd">Spočítat náhled</code> — systém ti ukáže kolik přesně směn se odhlásí (např. <em>„217 směn od 2026-04-27 do 2026-12-31"</em>)</li>
+      <li>Zkontroluj číslo a klikni <code class="kbd">Odhlásit 217 směn</code></li>
+    </ol>
+    <div class="result">
+      <strong>Výsledek:</strong> Těch 217 směn je teď volných (status „open"). Tomášovi z kalendáře zmizí, ostatní zaměstnanci je uvidí v sekci <em>Volné směny</em>. Pokud to byla chyba, dá se vrátit zpět individuálně (přiřazením Tomáše v editu směny).
+    </div>
+  </div>
+
+  <!-- ── KROK 2 ────────────────────────────────────────────── -->
+  <div class="step">
+    <div class="step-num">2</div>
+    <h2>Přiřadit pobočku Tábor k sérii</h2>
+    <p class="step-purpose">Některé série směn nemají přiřazenou pobočku (žlutý badge „Bez pobočky"). Jednou z nich je série, která má být <strong>Tábor</strong>.</p>
+    <ol>
+      <li>V levém menu klikni na <code class="kbd">Volné směny</code></li>
+      <li>Najdi nějakou směnu se ŽLUTÝM badgem <strong>„Bez pobočky"</strong></li>
+      <li>Klikni přímo na ten <strong>žlutý badge</strong> — rozbalí se malé menu</li>
+      <li>Nahoře uvidíš zaškrtnutý checkbox <strong>„Celá série (NNN× mezi volnými)"</strong> — <em>nech zaškrtnuté</em></li>
+      <li>Klikni na <code class="kbd">Tábor</code></li>
+      <li>Uvidíš toast: <em>„Pobočka Tábor nastavena pro celou sérii (NNN×)"</em></li>
+    </ol>
+    <div class="result">
+      <strong>Výsledek:</strong> Všechny směny v té sérii teď patří pod Tábor. Žluté badge se v celé sérii promění na oranžové „Tábor". Pokud byla série velká, efekt uvidíš okamžitě — všechny dny celé do budoucna.
+    </div>
+  </div>
+
+  <!-- ── KROK 3 ────────────────────────────────────────────── -->
+  <div class="step">
+    <div class="step-num">3</div>
+    <h2>Přiřadit pobočku Hradec k druhé sérii</h2>
+    <p class="step-purpose">Stejný postup jako krok 2, ale pro sérii, která má být <strong>Jindřichův Hradec</strong>.</p>
+    <ol>
+      <li>Ve <code class="kbd">Volné směny</code> najdi další směnu se žlutým <strong>„Bez pobočky"</strong> — jiný čas nebo jiná role než v kroku 2</li>
+      <li>Klikni na žlutý badge → checkbox <strong>Celá série</strong> nech zaškrtnutý → klikni <code class="kbd">Jindřichův Hradec</code></li>
+      <li>Toast: <em>„Pobočka JH nastavena pro celou sérii (NNN×)"</em></li>
+    </ol>
+    <div class="result">
+      <strong>Výsledek:</strong> I ta série teď patří pod JH. Žluté badge ve všech opakovaných směnách se promění na modré/fialové „Jindřichův Hradec".
+    </div>
+  </div>
+
+  <!-- ── KROK 4 ────────────────────────────────────────────── -->
+  <div class="step">
+    <div class="step-num">4</div>
+    <h2>Ověření, že je všechno čisté</h2>
+    <p class="step-purpose">Projdi si všechny 3 pohledy a zkontroluj, že to odpovídá tomu, co chceš.</p>
+    <ol>
+      <li>V horním selektoru pobočky přepni na <code class="kbd">Tábor</code> — v kalendáři bys měl vidět JEN oranžové Tábor směny. Pokud ještě uvidíš pár žlutých „Bez pobočky", jsou to zbytky k úklidu (opakuj krok 2 pro ně)</li>
+      <li>Přepni na <code class="kbd">Jindřichův Hradec</code> — uvidíš JEN modré/fialové JH směny</li>
+      <li>Přepni na <code class="kbd">Všechny pobočky</code> (první volba nahoře) — uvidíš vše dohromady. Pokud mají dvě směny stejný čas a roli (Pokladní 10–19 Tábor + JH), zobrazí se jako jedna karta s řádky</li>
+      <li>Klikni na <code class="kbd">Volné směny</code> v levém menu — uvidíš seznam všech otevřených směn s barevnými badgi podle pobočky</li>
+    </ol>
+    <div class="result">
+      <strong>Výsledek:</strong> Kalendář je přehledný, každá pobočka má vlastní barvu, volné směny jsou čitelné i na telefonu. Zaměstnanci se mohou přihlašovat.
+    </div>
+  </div>
+
+  <!-- ── UPOZORNĚNÍ ────────────────────────────────────────── -->
+  <div class="warn-box">
+    <div class="warn-title">Kdy se zastav a napiš vývojáři</div>
+    <strong>Když něco „zmizí":</strong> Data se nikdy nemažou, jen schovávají filtrem. Přepni horní selektor na <em>Všechny pobočky</em> a uvidíš všechno zpátky. Pokud máš pocit, že něco opravdu chybí, napiš — snadno se to dohledá v databázi.
+    <br><br>
+    <strong>Když se něco pokazí po akci:</strong> Pošli screenshot chyby a popiš poslední krok, který jsi udělal. Nepokračuj v další akci, dokud to nevyřešíme.
+  </div>
+
+  <!-- ── KROK 5 ────────────────────────────────────────────── -->
+  <div class="final">
+    <h2>Krok 5 · Zpráva zaměstnancům</h2>
+    <p>Jakmile máš kroky 1–4 hotové, pošli zaměstnancům do firemního chatu (WhatsApp / Messenger / SMS) něco takového:</p>
+    <div class="msg">
+      „Ahoj tým! Směny jsou teď rozdělené podle poboček (Tábor + JH) a všechny budoucí směny od 27. 4. jsou volné — přihlaste se prosím v aplikaci na ty, co vám sednou. Kdo má zájem o víc směn, vezme si rovnou celou opakovanou sérii (tlačítko ‚Celá série' v Otevřené směny). Díky!"
+    </div>
+  </div>
+
+  <footer>
+    Směny organizátor · KSH Web Studio · Návod pro manažera
+  </footer>
+
+</div>
+
+</body>
+</html>

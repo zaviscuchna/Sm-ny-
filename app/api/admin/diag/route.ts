@@ -15,10 +15,14 @@ export async function GET(req: NextRequest) {
       SELECT
         b.id,
         b.name,
-        (SELECT COUNT(*) FROM "User"   u WHERE u.business_id = b.id) AS user_count,
-        (SELECT COUNT(*) FROM "Shift"  s WHERE s.business_id = b.id) AS shift_total,
-        (SELECT COUNT(*) FROM "Shift"  s WHERE s.business_id = b.id AND s.status = 'open') AS open_total,
-        (SELECT COUNT(*) FROM "Branch" br WHERE br.business_id = b.id) AS branch_count
+        (SELECT COUNT(*) FROM "User"         u  WHERE u.business_id = b.id) AS user_count,
+        (SELECT COUNT(*) FROM "Shift"        s  WHERE s.business_id = b.id) AS shift_total,
+        (SELECT COUNT(*) FROM "Shift"        s  WHERE s.business_id = b.id AND s.status = 'open') AS open_total,
+        (SELECT COUNT(*) FROM "Branch"       br WHERE br.business_id = b.id) AS branch_count,
+        (SELECT COUNT(*) FROM "WorkLog"      w  WHERE w.business_id = b.id) AS worklog_total,
+        (SELECT COUNT(*) FROM "ClockSession" c  WHERE c.business_id = b.id) AS clock_total,
+        (SELECT MIN(date) FROM "WorkLog"     w  WHERE w.business_id = b.id) AS worklog_first_date,
+        (SELECT MAX(date) FROM "WorkLog"     w  WHERE w.business_id = b.id) AS worklog_last_date
       FROM "Business" b
       ORDER BY b.name
     `)
