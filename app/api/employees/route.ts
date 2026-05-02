@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const client = await pool.connect()
   try {
     const res = await client.query(
-      'SELECT * FROM "User" WHERE business_id = $1 AND role = \'employee\' ORDER BY name',
+      'SELECT * FROM "User" WHERE business_id = $1 AND role IN (\'employee\', \'manager\') ORDER BY name',
       [bizId]
     )
     const employees = res.rows.map(r => ({
