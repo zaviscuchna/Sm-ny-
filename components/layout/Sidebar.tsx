@@ -27,7 +27,7 @@ const NAV: NavItem[] = [
   { href: '/calendar',    label: 'Kalendář',        icon: Calendar,        roles: ['manager', 'employee'] },
   { href: '/open-shifts', label: 'Volné směny',     icon: Clock,           roles: ['manager', 'employee'] },
   { href: '/employees',   label: 'Zaměstnanci',     icon: Users,           roles: ['manager'] },
-  { href: '/my-shifts',   label: 'Moje směny',      icon: UserCheck,       roles: ['employee'] },
+  { href: '/my-shifts',   label: 'Moje směny',      icon: UserCheck,       roles: ['employee', 'manager'] },
   { href: '/history',     label: 'Historie',         icon: History,         roles: ['manager', 'employee'] },
   { href: '/payroll',     label: 'Výplaty',          icon: Calculator,      roles: ['manager', 'employee'] },
   { href: '/qr',          label: 'QR Docházka',      icon: QrCode,          roles: ['manager'] },

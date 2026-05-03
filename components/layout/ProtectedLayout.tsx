@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Coffee } from 'lucide-react'
 
-const MANAGER_ROUTES   = ['/dashboard', '/shifts', '/employees', '/open-shifts', '/calendar', '/settings', '/qr', '/history', '/payroll']
+const MANAGER_ROUTES   = ['/dashboard', '/shifts', '/employees', '/open-shifts', '/calendar', '/settings', '/qr', '/history', '/payroll', '/my-shifts']
 const EMPLOYEE_ROUTES  = ['/my-shifts', '/open-shifts', '/calendar', '/settings', '/history', '/payroll']
 const SUPERADMIN_ROUTES = ['/admin', '/settings']
 
