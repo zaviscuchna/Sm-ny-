@@ -11,7 +11,7 @@ import { UserAvatar } from '@/components/shared/UserAvatar'
 import { NewShiftDialog } from '@/components/shifts/NewShiftDialog'
 import { getShiftsForBusiness, getEmployeesForBusiness } from '@/lib/db'
 import type { Shift, User, Branch } from '@/types'
-import { ChevronLeft, ChevronRight, Clock, User as UserIcon, Plus, Trash2, UserCheck, Pencil, Check, X, Split } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock, User as UserIcon, Users, Plus, Trash2, UserCheck, Pencil, Check, X, Split } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { isRegistered } from '@/lib/db'
@@ -60,6 +60,91 @@ export default function ShiftsPage() {
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const [selectedDateStr, setSelectedDateStr] = useState(todayStr)
 
+  // Proposal modal pro zaměstnance — klik na cizí směnu nabídne výměnu nebo rozdělení.
+  const [swapTarget, setSwapTarget] = useState<Shift | null>(null)
+  const [proposalMode, setProposalMode] = useState<'swap'|'split'>('swap')
+  const [swapMyShiftId, setSwapMyShiftId] = useState<string>('')
+  const [swapMessage, setSwapMessage] = useState('')
+  const [swapSending, setSwapSending] = useState(false)
+  const [splitTime, setSplitTime] = useState('')
+  const [splitProposerHalf, setSplitProposerHalf] = useState<'first'|'second'>('second')
+
+  const openSwapProposal = (shift: Shift) => {
+    setSwapTarget(shift)
+    setProposalMode('swap')
+    setSwapMyShiftId('')
+    setSwapMessage('')
+    setSplitTime(midpointTime(shift.startTime, shift.endTime))
+    setSplitProposerHalf('second')
+  }
+
+  const submitSwapProposal = async () => {
+    if (!swapTarget || !swapTarget.assignedEmployee) return
+    setSwapSending(true)
+    try {
+      if (proposalMode === 'swap') {
+        if (!swapMyShiftId) return
+        const res = await fetch('/api/shift-swaps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromShiftId: swapMyShiftId,
+            toShiftId: swapTarget.id,
+            toUserId: swapTarget.assignedEmployee.id,
+            message: swapMessage || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          toast.error(d.error ?? 'Chyba při návrhu výměny')
+          return
+        }
+        toast.success(`Návrh výměny odeslán kolegovi ${swapTarget.assignedEmployee.name.split(' ')[0]}.`)
+        setSwapTarget(null)
+      } else {
+        if (!splitTime || splitTime <= swapTarget.startTime || splitTime >= swapTarget.endTime) {
+          toast.error(`Čas rozdělení musí být mezi ${swapTarget.startTime} a ${swapTarget.endTime}`)
+          return
+        }
+        const res = await fetch('/api/shift-split-proposals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shiftId: swapTarget.id,
+            splitTime,
+            proposerHalf: splitProposerHalf,
+            message: swapMessage || undefined,
+          }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          toast.error(d.error ?? 'Chyba při návrhu rozdělení')
+          return
+        }
+        toast.success(`Návrh rozdělení odeslán kolegovi ${swapTarget.assignedEmployee.name.split(' ')[0]}.`)
+        setSwapTarget(null)
+      }
+    } finally {
+      setSwapSending(false)
+    }
+  }
+
+  // Toggle "Jen já / Tým" pro zaměstnance (manažer vždy vidí všechno).
+  // Default Tým — aby zaměstnanec bez přiřazených směn neviděl prázdno.
+  const [showTeam, setShowTeam] = useState(true)
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('smenky_shifts_showteam')
+      if (saved !== null) setShowTeam(saved === '1')
+    } catch {}
+    setHydrated(true)
+  }, [])
+  useEffect(() => {
+    if (!hydrated) return
+    try { localStorage.setItem('smenky_shifts_showteam', showTeam ? '1' : '0') } catch {}
+  }, [showTeam, hydrated])
+
   // Load shifts + employees whenever the active business or branch changes
   useEffect(() => {
     if (!activeBusiness) return
@@ -96,7 +181,14 @@ export default function ShiftsPage() {
     if (!inWeek) setSelectedDateStr(weekDays[0].dateStr)
   }, [weekDays, selectedDateStr])
 
-  const allShifts = [...dbShifts, ...extraShifts]
+  const allShiftsRaw = [...dbShifts, ...extraShifts]
+  // Pro zaměstnance s vypnutým "Tým": ukázat jen vlastní směny.
+  const allShifts = useMemo(() => {
+    if (user?.role === 'employee' && !showTeam) {
+      return allShiftsRaw.filter(s => s.assignedEmployee?.id === user.id)
+    }
+    return allShiftsRaw
+  }, [allShiftsRaw, user?.id, user?.role, showTeam])
 
   const handleShiftsCreated = (shifts: Shift[]) => {
     setExtraShifts(prev => [...prev, ...shifts])
@@ -245,6 +337,33 @@ export default function ShiftsPage() {
     toast.success(`Směna rozdělena. Druhá půlka (${splitTime}–${data.newShift?.endTime}) je nyní volná.`)
   }
 
+  // Zaměstnanec si vezme volnou (open) směnu — atomicky se přiřadí
+  const handleTakeOpenShift = async (shift: Shift) => {
+    if (!user || !activeBusiness || !isRegistered(activeBusiness.id)) return
+    if (shift.status !== 'open') return
+    try {
+      const res = await fetch('/api/shift-applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shiftId: shift.id, employeeId: user.id, employeeName: user.name, bizId: activeBusiness.id }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        if (res.status === 409) toast.error(d.error ?? 'Směna se překrývá s tvou jinou směnou')
+        else toast.error(d.error ?? 'Chyba při přihlášení')
+        return
+      }
+      const update = (s: Shift) => s.id === shift.id
+        ? { ...s, assignedEmployee: { id: user.id, name: user.name, email: user.email, role: user.role, color: user.color }, status: 'assigned' as const }
+        : s
+      setDbShifts(prev => prev.map(update))
+      setExtraShifts(prev => prev.map(update))
+      toast.success('Přihlášen na směnu')
+    } catch {
+      toast.error('Chyba připojení')
+    }
+  }
+
   const handleDeleteSimilar = async (shift: Shift) => {
     if (!activeBusiness || !isRegistered(activeBusiness.id)) return
     const params = new URLSearchParams({ bizId: shift.businessId, roleNeeded: shift.roleNeeded, startTime: shift.startTime, endTime: shift.endTime })
@@ -287,7 +406,23 @@ export default function ShiftsPage() {
             </Button>
           )}
         </div>
-        {isManager && <NewShiftDialog employees={employees} onShiftsCreated={handleShiftsCreated} />}
+        <div className="flex items-center gap-2">
+          {user?.role === 'employee' && (
+            <button
+              onClick={() => setShowTeam(v => !v)}
+              className={`flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-medium transition-colors ${
+                showTeam
+                  ? 'bg-indigo-600 text-white'
+                  : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+              }`}
+              title={showTeam ? 'Zobrazit jen moje směny' : 'Zobrazit celý tým'}
+            >
+              {showTeam ? <Users className="w-3.5 h-3.5" /> : <UserIcon className="w-3.5 h-3.5" />}
+              {showTeam ? 'Tým' : 'Jen já'}
+            </button>
+          )}
+          {isManager && <NewShiftDialog employees={employees} onShiftsCreated={handleShiftsCreated} />}
+        </div>
       </div>
 
       {/* ── MOBILE VIEW ─────────────────────────────────────────────────── */}
@@ -363,7 +498,10 @@ export default function ShiftsPage() {
                   onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
                   seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined}
                   similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
-                  onDeleteSimilar={() => handleDeleteSimilar(shift)} />
+                  onDeleteSimilar={() => handleDeleteSimilar(shift)}
+                  onTake={handleTakeOpenShift}
+                  onPropose={openSwapProposal}
+                  currentUserId={user?.id} />
               ))}
               {isManager && (
                 <NewShiftDialog
@@ -424,7 +562,10 @@ export default function ShiftsPage() {
                       onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
                       seriesCount={shift.recurringGroupId ? groupCounts[shift.recurringGroupId] : undefined}
                       similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
-                      onDeleteSimilar={() => handleDeleteSimilar(shift)} />
+                      onDeleteSimilar={() => handleDeleteSimilar(shift)}
+                      onTake={handleTakeOpenShift}
+                      onPropose={openSwapProposal}
+                      currentUserId={user?.id} />
                   ))}
                       {isManager && (
                         <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
@@ -443,6 +584,142 @@ export default function ShiftsPage() {
           })}
         </div>
       </div>
+
+      {/* ── Proposal modal (zaměstnanec → cizí směna): swap nebo split ─── */}
+      {swapTarget && swapTarget.assignedEmployee && user && (() => {
+        const myFutureShifts = allShiftsRaw
+          .filter(s => s.assignedEmployee?.id === user.id && s.date >= todayStr)
+          .sort((a, b) => a.date === b.date ? a.startTime.localeCompare(b.startTime) : a.date.localeCompare(b.date))
+        const splitOk = !!splitTime && splitTime > swapTarget.startTime && splitTime < swapTarget.endTime
+        const canSubmit = proposalMode === 'swap' ? !!swapMyShiftId : splitOk
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSwapTarget(null)}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-500">Návrh kolegovi</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-0.5">S kolegou {swapTarget.assignedEmployee.name}</p>
+                <div className="mt-2 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400">
+                  <strong className="text-slate-800 dark:text-slate-200">{swapTarget.roleNeeded}</strong>
+                  <span className="mx-1 text-slate-400">·</span>
+                  {format(new Date(swapTarget.date + 'T12:00'), 'EEE d. M.', { locale: cs })} {swapTarget.startTime}–{swapTarget.endTime}
+                </div>
+              </div>
+              <div className="px-5 pt-3 pb-1 flex gap-1">
+                <button
+                  onClick={() => setProposalMode('swap')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                    proposalMode === 'swap'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >Výměna celé směny</button>
+                <button
+                  onClick={() => setProposalMode('split')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                    proposalMode === 'split'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
+                >Rozdělení směny</button>
+              </div>
+              <div className="px-5 py-4 overflow-y-auto flex-1">
+                {proposalMode === 'swap' ? (
+                  <>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Za kterou tvoji směnu?</p>
+                    {myFutureShifts.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-6 text-center">Nemáš žádné budoucí směny k nabídnutí.</p>
+                    ) : (
+                      <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                        {myFutureShifts.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => setSwapMyShiftId(s.id)}
+                            className={`w-full text-left px-3 py-2 rounded-xl border transition-colors ${
+                              swapMyShiftId === s.id
+                                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                                : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">{s.roleNeeded}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                              {format(new Date(s.date + 'T12:00'), 'EEE d. M.', { locale: cs })} · {s.startTime}–{s.endTime}
+                              {s.branch && <span className="ml-1">· {s.branch.name}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Ve kolik rozdělit?</p>
+                    <input
+                      type="time"
+                      value={splitTime}
+                      min={swapTarget.startTime}
+                      max={swapTarget.endTime}
+                      onChange={e => setSplitTime(e.target.value)}
+                      className="w-full text-sm rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    />
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                      Rozsah: {swapTarget.startTime} – {swapTarget.endTime}
+                    </p>
+
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-2">Kterou půlku si vezmeš?</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setSplitProposerHalf('first')}
+                        className={`px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                          splitProposerHalf === 'first'
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="text-[11px] font-semibold text-indigo-500 uppercase">První</div>
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{swapTarget.startTime}–{splitOk ? splitTime : '?'}</div>
+                      </button>
+                      <button
+                        onClick={() => setSplitProposerHalf('second')}
+                        className={`px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                          splitProposerHalf === 'second'
+                            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        <div className="text-[11px] font-semibold text-indigo-500 uppercase">Druhá</div>
+                        <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{splitOk ? splitTime : '?'}–{swapTarget.endTime}</div>
+                      </button>
+                    </div>
+                    {splitOk && (
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-3 px-3 py-2 rounded-lg bg-indigo-50/60 dark:bg-indigo-900/20">
+                        Kolega {swapTarget.assignedEmployee.name.split(' ')[0]} si nechá <strong>{splitProposerHalf === 'first' ? `${splitTime}–${swapTarget.endTime}` : `${swapTarget.startTime}–${splitTime}`}</strong>, ty dostaneš <strong>{splitProposerHalf === 'first' ? `${swapTarget.startTime}–${splitTime}` : `${splitTime}–${swapTarget.endTime}`}</strong>.
+                      </p>
+                    )}
+                  </>
+                )}
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mt-4 mb-1.5">Zpráva (volitelná)</label>
+                <textarea
+                  value={swapMessage}
+                  onChange={e => setSwapMessage(e.target.value)}
+                  placeholder="Např. Mám lékaře, mohl bys prosím..."
+                  rows={2}
+                  className="w-full text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex gap-2 bg-slate-50/50 dark:bg-slate-800/50">
+                <Button
+                  onClick={submitSwapProposal}
+                  disabled={!canSubmit || swapSending}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40"
+                >
+                  {swapSending ? 'Odesílám…' : proposalMode === 'swap' ? 'Odeslat návrh výměny' : 'Odeslat návrh rozdělení'}
+                </Button>
+                <Button variant="outline" onClick={() => setSwapTarget(null)}>Zrušit</Button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -463,6 +740,9 @@ interface CardProps {
   seriesCount?: number
   similarCount?: number
   onDeleteSimilar?: () => void
+  onTake?: (shift: Shift) => void
+  onPropose?: (shift: Shift) => void
+  currentUserId?: string
 }
 
 // Midpoint time helper — vrátí střed mezi start a end ve formátu HH:MM
@@ -477,7 +757,11 @@ function midpointTime(start: string, end: string): string {
 
 // ── Mobile shift card ────────────────────────────────────────────────────────
 
-function MobileShiftCard({ shift, employees, branches, canEdit = true, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+function MobileShiftCard({ shift, employees, branches, canEdit = true, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar, onTake, onPropose, currentUserId }: CardProps) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const canTake = !canEdit && !!onTake && shift.status === 'open' && shift.date >= todayStr
+  const isForeign = !canEdit && !!shift.assignedEmployee && !!currentUserId && shift.assignedEmployee.id !== currentUserId
+  const canPropose = isForeign && !!onPropose && shift.date >= todayStr
   const [mode, setMode] = useState<'view'|'assign'|'edit'|'split'|'branch'>('view')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
@@ -598,10 +882,27 @@ function MobileShiftCard({ shift, employees, branches, canEdit = true, onAssign,
                 )}
               </div>
               {shift.assignedEmployee ? (
-                <div className="flex items-center gap-2">
-                  <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{shift.assignedEmployee.name}</span>
-                </div>
+                canPropose ? (
+                  <button onClick={() => onPropose!(shift)} title="Klikni pro návrh výměny / rozdělení"
+                    className="flex items-center gap-2 px-2 py-1 -mx-2 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+                    <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{shift.assignedEmployee.name}</span>
+                    <span className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wide">Návrh</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{shift.assignedEmployee.name}</span>
+                  </div>
+                )
+              ) : canTake ? (
+                <button onClick={() => onTake!(shift)}
+                  className="flex items-center gap-2 px-2 py-1 -mx-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors">
+                  <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                    <Plus className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">Vzít si směnu</span>
+                </button>
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -754,7 +1055,11 @@ function MobileShiftCard({ shift, employees, branches, canEdit = true, onAssign,
 
 // ── Desktop shift card ────────────────────────────────────────────────────────
 
-function DesktopShiftCard({ shift, employees, branches, canEdit = true, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+function DesktopShiftCard({ shift, employees, branches, canEdit = true, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar, onTake, onPropose, currentUserId }: CardProps) {
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const canTake = !canEdit && !!onTake && shift.status === 'open' && shift.date >= todayStr
+  const isForeign = !canEdit && !!shift.assignedEmployee && !!currentUserId && shift.assignedEmployee.id !== currentUserId
+  const canPropose = isForeign && !!onPropose && shift.date >= todayStr
   const [showAssign, setShowAssign] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -836,10 +1141,27 @@ function DesktopShiftCard({ shift, employees, branches, canEdit = true, onAssign
         )
       )}
       {shift.assignedEmployee ? (
-        <div className="flex items-center gap-1">
-          <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
-          <span className="text-[10px] text-slate-600 dark:text-slate-400 truncate">{shift.assignedEmployee.name.split(' ')[0]}</span>
-        </div>
+        canPropose ? (
+          <button onClick={() => onPropose!(shift)} title="Návrh výměny / rozdělení"
+            className="w-full flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+            <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
+            <span className="text-[10px] text-slate-600 dark:text-slate-400 truncate flex-1 text-left">{shift.assignedEmployee.name.split(' ')[0]}</span>
+            <span className="text-[8px] text-indigo-500 font-bold uppercase">Návrh</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-1">
+            <UserAvatar name={shift.assignedEmployee.name} color={shift.assignedEmployee.color} size="sm" />
+            <span className="text-[10px] text-slate-600 dark:text-slate-400 truncate">{shift.assignedEmployee.name.split(' ')[0]}</span>
+          </div>
+        )
+      ) : canTake ? (
+        <button onClick={() => onTake!(shift)} title="Vzít si tuto směnu"
+          className="flex items-center gap-1 px-1.5 py-0.5 -mx-1 rounded hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors">
+          <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+            <Plus className="w-2 h-2 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Vzít si</span>
+        </button>
       ) : (
         <div className="flex items-center gap-1">
           <div className="w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
