@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Coffee } from 'lucide-react'
 
 const MANAGER_ROUTES   = ['/dashboard', '/shifts', '/employees', '/open-shifts', '/calendar', '/settings', '/qr', '/history', '/payroll', '/my-shifts']
-const EMPLOYEE_ROUTES  = ['/my-shifts', '/open-shifts', '/calendar', '/settings', '/history', '/payroll']
+const EMPLOYEE_ROUTES  = ['/my-shifts', '/shifts', '/open-shifts', '/calendar', '/settings', '/history', '/payroll']
 const SUPERADMIN_ROUTES = ['/admin', '/settings']
 
 export function ProtectedLayout({ children }: { children: React.ReactNode }) {
