@@ -51,6 +51,7 @@ function branchColorClasses(branchId: string): string {
 export default function ShiftsPage() {
   const { user, activeBusiness } = useAuth()
   const { activeBranch, branches } = useBranch()
+  const isManager = user?.role === 'manager' || user?.role === 'superadmin'
   const [weekOffset, setWeekOffset]       = useState(0)
   const [dbShifts,   setDbShifts]         = useState<Shift[]>([])
   const [extraShifts, setExtraShifts]     = useState<Shift[]>([])
@@ -286,7 +287,7 @@ export default function ShiftsPage() {
             </Button>
           )}
         </div>
-        <NewShiftDialog employees={employees} onShiftsCreated={handleShiftsCreated} />
+        {isManager && <NewShiftDialog employees={employees} onShiftsCreated={handleShiftsCreated} />}
       </div>
 
       {/* ── MOBILE VIEW ─────────────────────────────────────────────────── */}
@@ -334,22 +335,29 @@ export default function ShiftsPage() {
           </div>
 
           {selectedDayShifts.length === 0 ? (
-            <NewShiftDialog
-              defaultDate={selectedDateStr}
-              employees={employees} onShiftsCreated={handleShiftsCreated}
-              trigger={
-                <button className="w-full border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl py-10 flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-400 dark:hover:border-indigo-700 dark:hover:text-indigo-400 transition-all">
-                  <div className="w-10 h-10 rounded-full border-2 border-dashed border-current flex items-center justify-center">
-                    <Plus className="w-5 h-5" />
-                  </div>
-                  <span className="text-sm font-medium">Přidat směnu</span>
-                </button>
-              }
-            />
+            isManager ? (
+              <NewShiftDialog
+                defaultDate={selectedDateStr}
+                employees={employees} onShiftsCreated={handleShiftsCreated}
+                trigger={
+                  <button className="w-full border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-2xl py-10 flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-400 dark:hover:border-indigo-700 dark:hover:text-indigo-400 transition-all">
+                    <div className="w-10 h-10 rounded-full border-2 border-dashed border-current flex items-center justify-center">
+                      <Plus className="w-5 h-5" />
+                    </div>
+                    <span className="text-sm font-medium">Přidat směnu</span>
+                  </button>
+                }
+              />
+            ) : (
+              <div className="w-full border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl py-10 flex items-center justify-center text-slate-400 dark:text-slate-500">
+                <span className="text-sm">Žádné směny</span>
+              </div>
+            )
           ) : (
             <>
               {selectedDayShifts.map(shift => (
                 <MobileShiftCard key={shift.id} shift={shift} employees={employees} branches={branches}
+                  canEdit={isManager}
                   onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
                   onSplit={handleSplitShift}
                   onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
@@ -357,15 +365,17 @@ export default function ShiftsPage() {
                   similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
                   onDeleteSimilar={() => handleDeleteSimilar(shift)} />
               ))}
-              <NewShiftDialog
-                defaultDate={selectedDateStr}
-                employees={employees} onShiftsCreated={handleShiftsCreated}
-                trigger={
-                  <button className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl py-3 text-sm text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-500 dark:hover:border-indigo-700 dark:hover:text-indigo-400 transition-all">
-                    <Plus className="w-4 h-4" /> Přidat další směnu
-                  </button>
-                }
-              />
+              {isManager && (
+                <NewShiftDialog
+                  defaultDate={selectedDateStr}
+                  employees={employees} onShiftsCreated={handleShiftsCreated}
+                  trigger={
+                    <button className="w-full flex items-center justify-center gap-2 border border-dashed border-slate-200 dark:border-slate-700 rounded-2xl py-3 text-sm text-slate-400 dark:text-slate-500 hover:border-indigo-300 hover:text-indigo-500 dark:hover:border-indigo-700 dark:hover:text-indigo-400 transition-all">
+                      <Plus className="w-4 h-4" /> Přidat další směnu
+                    </button>
+                  }
+                />
+              )}
             </>
           )}
         </div>
@@ -393,17 +403,22 @@ export default function ShiftsPage() {
 
                 <div className="flex flex-col gap-1.5">
                   {dayShifts.length === 0 ? (
-                    <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
-                      trigger={
-                        <button className="w-full h-16 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-slate-300 dark:text-slate-600 hover:border-indigo-200 dark:hover:border-indigo-800 hover:text-indigo-400 dark:hover:text-indigo-500 transition-all text-xs flex flex-col items-center justify-center gap-1">
-                          <span className="text-lg leading-none">+</span>
-                        </button>
-                      }
-                    />
+                    isManager ? (
+                      <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
+                        trigger={
+                          <button className="w-full h-16 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-xl text-slate-300 dark:text-slate-600 hover:border-indigo-200 dark:hover:border-indigo-800 hover:text-indigo-400 dark:hover:text-indigo-500 transition-all text-xs flex flex-col items-center justify-center gap-1">
+                            <span className="text-lg leading-none">+</span>
+                          </button>
+                        }
+                      />
+                    ) : (
+                      <div className="w-full h-16 border-2 border-dashed border-slate-50 dark:border-slate-800/50 rounded-xl" />
+                    )
                   ) : (
                     <>
                       {dayShifts.map(shift => (
                     <DesktopShiftCard key={shift.id} shift={shift} employees={employees} branches={branches}
+                      canEdit={isManager}
                       onAssign={handleAssignEmployee} onDelete={handleDeleteShift} onEdit={handleEditShift}
                       onSplit={handleSplitShift}
                       onDeleteSeries={handleDeleteSeries} onEditSeries={handleEditSeries}
@@ -411,13 +426,15 @@ export default function ShiftsPage() {
                       similarCount={similarCounts[`${shift.businessId}|${shift.roleNeeded}|${shift.startTime}|${shift.endTime}`]}
                       onDeleteSimilar={() => handleDeleteSimilar(shift)} />
                   ))}
-                      <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
-                        trigger={
-                          <button className="w-full h-7 border border-dashed border-slate-100 dark:border-slate-800 rounded-lg text-slate-300 dark:text-slate-600 hover:border-indigo-200 dark:hover:border-indigo-800 hover:text-indigo-400 dark:hover:text-indigo-500 transition-all text-xs flex items-center justify-center">
-                            <span className="text-sm leading-none">+</span>
-                          </button>
-                        }
-                      />
+                      {isManager && (
+                        <NewShiftDialog defaultDate={dateStr} employees={employees} onShiftsCreated={handleShiftsCreated}
+                          trigger={
+                            <button className="w-full h-7 border border-dashed border-slate-100 dark:border-slate-800 rounded-lg text-slate-300 dark:text-slate-600 hover:border-indigo-200 dark:hover:border-indigo-800 hover:text-indigo-400 dark:hover:text-indigo-500 transition-all text-xs flex items-center justify-center">
+                              <span className="text-sm leading-none">+</span>
+                            </button>
+                          }
+                        />
+                      )}
                     </>
                   )}
                 </div>
@@ -436,6 +453,7 @@ interface CardProps {
   shift: Shift
   employees: User[]
   branches: Branch[]
+  canEdit?: boolean
   onAssign: (shiftId: string, employee: User | null) => void
   onDelete: (shiftId: string) => void
   onEdit:   (shiftId: string, fields: Partial<Pick<Shift,'roleNeeded'|'startTime'|'endTime'|'date'|'notes'|'branchId'>>) => void
@@ -459,7 +477,7 @@ function midpointTime(start: string, end: string): string {
 
 // ── Mobile shift card ────────────────────────────────────────────────────────
 
-function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+function MobileShiftCard({ shift, employees, branches, canEdit = true, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
   const [mode, setMode] = useState<'view'|'assign'|'edit'|'split'|'branch'>('view')
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [editSeriesConfirm, setEditSeriesConfirm] = useState(false)
@@ -556,17 +574,27 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
                 <span className="text-slate-300 dark:text-slate-600">·</span>
                 <span className="font-medium text-slate-600 dark:text-slate-400">{getDuration(shift.startTime, shift.endTime)}</span>
                 {branches.length > 0 && (
-                  <button
-                    onClick={() => setMode(mode === 'branch' ? 'view' : 'branch')}
-                    className={`ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${
-                      shift.branch
-                        ? branchColorClasses(shift.branch.id)
-                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
-                    }`}
-                    title={shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku'}
-                  >
-                    {shift.branch?.name ?? 'Bez pobočky'}
-                  </button>
+                  canEdit ? (
+                    <button
+                      onClick={() => setMode(mode === 'branch' ? 'view' : 'branch')}
+                      className={`ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-colors ${
+                        shift.branch
+                          ? branchColorClasses(shift.branch.id)
+                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+                      }`}
+                      title={shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku'}
+                    >
+                      {shift.branch?.name ?? 'Bez pobočky'}
+                    </button>
+                  ) : (
+                    shift.branch && (
+                      <span
+                        className={`ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${branchColorClasses(shift.branch.id)}`}
+                      >
+                        {shift.branch.name}
+                      </span>
+                    )
+                  )
                 )}
               </div>
               {shift.assignedEmployee ? (
@@ -585,6 +613,7 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
             </div>
             <div className="flex flex-col items-end gap-1.5">
               <ShiftStatusBadge status={shift.status} />
+              {canEdit && (
               <div className="flex gap-1 relative">
                 <button onClick={() => setMode(mode === 'assign' ? 'view' : 'assign')} title="Přiřadit zaměstnance"
                   className={`p-1.5 rounded-lg transition-colors ${mode === 'assign' ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-600 dark:hover:text-indigo-400'}`}>
@@ -631,6 +660,7 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
                   </div>
                 )}
               </div>
+              )}
             </div>
           </div>
           {shift.notes && <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 pt-2 border-t border-slate-50 dark:border-slate-800">{shift.notes}</p>}
@@ -724,7 +754,7 @@ function MobileShiftCard({ shift, employees, branches, onAssign, onDelete, onEdi
 
 // ── Desktop shift card ────────────────────────────────────────────────────────
 
-function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
+function DesktopShiftCard({ shift, employees, branches, canEdit = true, onAssign, onDelete, onEdit, onSplit, onDeleteSeries, onEditSeries, seriesCount, similarCount, onDeleteSimilar }: CardProps) {
   const [showAssign, setShowAssign] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [showEditForm, setShowEditForm] = useState(false)
@@ -783,17 +813,27 @@ function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEd
       </div>
       <p className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 truncate">{shift.roleNeeded}</p>
       {branches.length > 0 && (
-        <button
-          onClick={() => { closePopovers(); setShowBranch(v => !v) }}
-          className={`w-full mt-1 mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold truncate text-left transition-colors ${
-            shift.branch
-              ? branchColorClasses(shift.branch.id)
-              : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
-          }`}
-          title={shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku'}
-        >
-          {shift.branch?.name ?? '+ pobočka'}
-        </button>
+        canEdit ? (
+          <button
+            onClick={() => { closePopovers(); setShowBranch(v => !v) }}
+            className={`w-full mt-1 mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold truncate text-left transition-colors ${
+              shift.branch
+                ? branchColorClasses(shift.branch.id)
+                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+            }`}
+            title={shift.branch ? 'Změnit pobočku' : 'Přiřadit pobočku'}
+          >
+            {shift.branch?.name ?? '+ pobočka'}
+          </button>
+        ) : (
+          shift.branch && (
+            <div
+              className={`w-full mt-1 mb-1.5 px-1.5 py-0.5 rounded text-[9px] font-semibold truncate text-left ${branchColorClasses(shift.branch.id)}`}
+            >
+              {shift.branch.name}
+            </div>
+          )
+        )
       )}
       {shift.assignedEmployee ? (
         <div className="flex items-center gap-1">
@@ -810,24 +850,26 @@ function DesktopShiftCard({ shift, employees, branches, onAssign, onDelete, onEd
       )}
       <div className="mt-1.5 flex items-center justify-between">
         <ShiftStatusBadge status={shift.status} />
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditForm(false); setShowSplit(false) }} title="Přiřadit"
-            className="p-1 rounded text-slate-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-            <UserCheck className="w-3 h-3" />
-          </button>
-          <button onClick={openSplit} title="Rozdělit"
-            className="p-1 rounded text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
-            <Split className="w-3 h-3" />
-          </button>
-          <button onClick={openEdit} title="Upravit"
-            className="p-1 rounded text-slate-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
-            <Pencil className="w-3 h-3" />
-          </button>
-          <button onClick={() => { setDeleteConfirm(v => !v); setShowAssign(false); setShowEditForm(false); setShowSplit(false) }} title="Smazat"
-            className="p-1 rounded text-slate-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 dark:hover:text-red-400 transition-colors">
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => { setShowAssign(v => !v); setDeleteConfirm(false); setShowEditForm(false); setShowSplit(false) }} title="Přiřadit"
+              className="p-1 rounded text-slate-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+              <UserCheck className="w-3 h-3" />
+            </button>
+            <button onClick={openSplit} title="Rozdělit"
+              className="p-1 rounded text-slate-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-600 dark:hover:text-purple-400 transition-colors">
+              <Split className="w-3 h-3" />
+            </button>
+            <button onClick={openEdit} title="Upravit"
+              className="p-1 rounded text-slate-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 hover:text-amber-600 dark:hover:text-amber-400 transition-colors">
+              <Pencil className="w-3 h-3" />
+            </button>
+            <button onClick={() => { setDeleteConfirm(v => !v); setShowAssign(false); setShowEditForm(false); setShowSplit(false) }} title="Smazat"
+              className="p-1 rounded text-slate-400 hover:bg-red-100 dark:hover:bg-red-900/40 hover:text-red-500 dark:hover:text-red-400 transition-colors">
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        )}
       </div>
       {showAssign && (
         <div className="absolute top-full left-0 z-20 mt-1 w-44 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-lg overflow-hidden">
