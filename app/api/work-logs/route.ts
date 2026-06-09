@@ -80,6 +80,50 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  const session = await getSession(req)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Only managers/superadmins may correct attendance records
+  if (session.role !== 'manager' && session.role !== 'superadmin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const { id, log } = await req.json()
+  if (!id || !log) return NextResponse.json({ error: 'Bad request' }, { status: 400 })
+
+  const client = await pool.connect()
+  try {
+    const { rows } = await client.query(
+      'SELECT * FROM "WorkLog" WHERE id = $1',
+      [id]
+    )
+    if (rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const existing = rows[0]
+    if (existing.business_id !== session.bizId && session.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Only these fields are editable; everything else stays exactly as it was
+    const date     = log.date     ?? existing.date
+    const clockIn  = log.clockIn  ?? existing.clock_in
+    const clockOut = log.clockOut ?? existing.clock_out
+    const notes    = log.notes !== undefined ? log.notes : existing.notes
+    const hours    = calcHours(clockIn, clockOut)
+
+    const { rows: updated } = await client.query(
+      `UPDATE "WorkLog"
+         SET date = $2, clock_in = $3, clock_out = $4, hours = $5, notes = $6
+       WHERE id = $1
+       RETURNING *`,
+      [id, date, clockIn, clockOut, hours, notes ?? null]
+    )
+    return NextResponse.json(rowToLog(updated[0]))
+  } finally {
+    client.release()
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   const session = await getSession(req)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

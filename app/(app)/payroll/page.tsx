@@ -1,17 +1,17 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { format, endOfMonth, parseISO, subMonths, addMonths } from 'date-fns'
 import { cs } from 'date-fns/locale'
 import { TopBar } from '@/components/layout/TopBar'
 import { UserAvatar } from '@/components/shared/UserAvatar'
 import { useAuth } from '@/contexts/AuthContext'
 import { useBranch } from '@/contexts/BranchContext'
-import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness, getLogsForBusiness, getLogsForEmployee } from '@/lib/db'
+import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness, getLogsForBusiness, getLogsForEmployee, updateLogInDB, deleteLogFromDB } from '@/lib/db'
 import type { Shift, User } from '@/types'
 import type { WorkLog } from '@/lib/work-logs'
 import {
-  Calculator, ChevronLeft, ChevronRight, Printer, Info,
+  Calculator, ChevronLeft, ChevronRight, Printer, Info, Pencil, Trash2, Check, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -47,7 +47,7 @@ export default function PayrollPage() {
   const [dateTo, setDateTo] = useState('')
   const [hourlyRate, setHourlyRate] = useState<string>('')
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     if (!activeBusiness || !user) return
     setLoading(true)
     Promise.all([
@@ -64,7 +64,11 @@ export default function PayrollPage() {
       console.error('Chyba při načítání dat:', err)
       toast.error('Nepodařilo se načíst data')
     }).finally(() => setLoading(false))
-  }, [activeBusiness?.id, activeBranch?.id, user?.id, month])
+  }, [activeBusiness?.id, activeBranch?.id, user?.id, isManager, month])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   // Compute payroll data — combine WorkLogs + past Shifts
   const payrollData = useMemo(() => {
@@ -350,6 +354,9 @@ export default function PayrollPage() {
         shifts={shifts.filter(s => s.assignedEmployee?.id === detailUserId)}
         dateFrom={dateFrom}
         dateTo={dateTo}
+        isManager={isManager}
+        bizId={activeBusiness?.id ?? ''}
+        onChanged={loadData}
       />
     </div>
   )
@@ -365,10 +372,62 @@ interface DetailProps {
   shifts: Shift[]
   dateFrom: string
   dateTo: string
+  isManager: boolean
+  bizId: string
+  onChanged: () => void
 }
 
-function EmployeeDetailModal({ open, onClose, user, month, rate, workLogs, shifts, dateFrom, dateTo }: DetailProps) {
+function EmployeeDetailModal({ open, onClose, user, month, rate, workLogs, shifts, dateFrom, dateTo, isManager, bizId, onChanged }: DetailProps) {
+  // Inline-edit state for attendance (worklog) rows
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ date: '', clockIn: '', clockOut: '', notes: '' })
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
   if (!user) return null
+
+  const startEdit = (logId: string, date: string, clockIn: string, clockOut: string, notes?: string) => {
+    setConfirmDeleteId(null)
+    setEditingId(logId)
+    setEditForm({ date, clockIn, clockOut, notes: notes ?? '' })
+  }
+
+  const saveEdit = async (logId: string) => {
+    if (!editForm.clockIn || !editForm.clockOut || !editForm.date) {
+      toast.error('Vyplň datum, příchod i odchod')
+      return
+    }
+    setSaving(true)
+    try {
+      await updateLogInDB(logId, {
+        date: editForm.date,
+        clockIn: editForm.clockIn,
+        clockOut: editForm.clockOut,
+        notes: editForm.notes || undefined,
+      }, bizId)
+      toast.success('Záznam upraven')
+      setEditingId(null)
+      onChanged()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Úprava se nezdařila')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const doDelete = async (logId: string) => {
+    setSaving(true)
+    try {
+      await deleteLogFromDB(logId, bizId)
+      toast.success('Záznam smazán')
+      setConfirmDeleteId(null)
+      onChanged()
+    } catch {
+      toast.error('Smazání se nezdařilo')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const effectiveFrom = dateFrom || `${month}-01`
   const effectiveTo = dateTo || format(endOfMonth(parseISO(`${month}-01`)), 'yyyy-MM-dd')
@@ -383,10 +442,10 @@ function EmployeeDetailModal({ open, onClose, user, month, rate, workLogs, shift
     return (s.date < today && s.assignedEmployee) || s.status === 'completed'
   })
 
-  type Entry = { date: string; type: 'log' | 'shift'; start: string; end: string; hours: number; note?: string }
+  type Entry = { date: string; type: 'log' | 'shift'; start: string; end: string; hours: number; note?: string; logId?: string }
   const entries: Entry[] = [
     ...logsInRange.map((l): Entry => ({
-      date: l.date, type: 'log', start: l.clockIn, end: l.clockOut, hours: l.hours, note: l.notes,
+      date: l.date, type: 'log', start: l.clockIn, end: l.clockOut, hours: l.hours, note: l.notes, logId: l.id,
     })),
     ...shiftsInRange.map((s): Entry => {
       const [sh, sm] = (s.actualStart ?? s.startTime).split(':').map(Number)
@@ -443,33 +502,100 @@ function EmployeeDetailModal({ open, onClose, user, month, rate, workLogs, shift
                   <th className="px-4 py-2 text-left font-semibold text-slate-500 uppercase text-[10px]">Čas</th>
                   <th className="px-4 py-2 text-right font-semibold text-slate-500 uppercase text-[10px]">Hodin</th>
                   {rate > 0 && <th className="px-4 py-2 text-right font-semibold text-slate-500 uppercase text-[10px]">Kč</th>}
+                  {isManager && <th className="px-4 py-2 text-right font-semibold text-slate-500 uppercase text-[10px] print:hidden">Akce</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                {entries.map((e, i) => (
-                  <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400">
-                      {format(parseISO(e.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        e.type === 'log'
-                          ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                          : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                      }`}>
-                        {e.type === 'log' ? 'docházka' : 'směna'}
-                      </span>
-                      {e.note && <span className="ml-2 text-slate-400 dark:text-slate-500 truncate">{e.note}</span>}
-                    </td>
-                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{e.start}–{e.end}</td>
-                    <td className="px-4 py-2 text-right font-semibold text-slate-700 dark:text-slate-300">{e.hours}h</td>
-                    {rate > 0 && (
-                      <td className="px-4 py-2 text-right font-semibold text-indigo-600 dark:text-indigo-400">
-                        {Math.round(e.hours * rate).toLocaleString('cs-CZ')} Kč
+                {entries.map((e, i) => {
+                  const editable = isManager && e.type === 'log' && e.logId
+                  const isEditing = editable && editingId === e.logId
+                  const isConfirming = editable && confirmDeleteId === e.logId
+                  const colSpan = 1 + 1 + 1 + 1 + (rate > 0 ? 1 : 0) + (isManager ? 1 : 0)
+
+                  if (isEditing) {
+                    return (
+                      <tr key={i} className="bg-amber-50/50 dark:bg-amber-900/10">
+                        <td colSpan={colSpan} className="px-4 py-3">
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div>
+                              <Label className="text-[10px] text-slate-500 mb-0.5 block">Datum</Label>
+                              <Input type="date" value={editForm.date} onChange={ev => setEditForm(f => ({ ...f, date: ev.target.value }))} className="h-8 text-xs w-36" />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-slate-500 mb-0.5 block">Příchod</Label>
+                              <Input type="time" value={editForm.clockIn} onChange={ev => setEditForm(f => ({ ...f, clockIn: ev.target.value }))} className="h-8 text-xs w-24" />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-slate-500 mb-0.5 block">Odchod</Label>
+                              <Input type="time" value={editForm.clockOut} onChange={ev => setEditForm(f => ({ ...f, clockOut: ev.target.value }))} className="h-8 text-xs w-24" />
+                            </div>
+                            <div className="flex-1 min-w-[120px]">
+                              <Label className="text-[10px] text-slate-500 mb-0.5 block">Poznámka</Label>
+                              <Input value={editForm.notes} onChange={ev => setEditForm(f => ({ ...f, notes: ev.target.value }))} className="h-8 text-xs" placeholder="—" />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Button size="sm" disabled={saving} onClick={() => saveEdit(e.logId!)} className="h-8 gap-1 bg-green-600 hover:bg-green-700 text-white">
+                                <Check className="w-3.5 h-3.5" /> Uložit
+                              </Button>
+                              <Button size="sm" variant="outline" disabled={saving} onClick={() => setEditingId(null)} className="h-8 gap-1">
+                                <X className="w-3.5 h-3.5" /> Zrušit
+                              </Button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  return (
+                    <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                      <td className="px-4 py-2 text-slate-600 dark:text-slate-400">
+                        {format(parseISO(e.date + 'T12:00:00'), 'EEE d. M.', { locale: cs })}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="px-4 py-2">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          e.type === 'log'
+                            ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                            : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                        }`}>
+                          {e.type === 'log' ? 'docházka' : 'směna'}
+                        </span>
+                        {e.note && <span className="ml-2 text-slate-400 dark:text-slate-500 truncate">{e.note}</span>}
+                      </td>
+                      <td className="px-4 py-2 text-slate-600 dark:text-slate-400">{e.start}–{e.end}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-slate-700 dark:text-slate-300">{e.hours}h</td>
+                      {rate > 0 && (
+                        <td className="px-4 py-2 text-right font-semibold text-indigo-600 dark:text-indigo-400">
+                          {Math.round(e.hours * rate).toLocaleString('cs-CZ')} Kč
+                        </td>
+                      )}
+                      {isManager && (
+                        <td className="px-4 py-2 text-right print:hidden whitespace-nowrap">
+                          {editable ? (
+                            isConfirming ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="text-[10px] text-slate-500">Smazat?</span>
+                                <button disabled={saving} onClick={() => doDelete(e.logId!)} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-600 hover:bg-red-700 text-white">Ano</button>
+                                <button disabled={saving} onClick={() => setConfirmDeleteId(null)} className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">Ne</button>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                <button onClick={() => startEdit(e.logId!, e.date, e.start, e.end, e.note)} title="Upravit" className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => { setEditingId(null); setConfirmDeleteId(e.logId!) }} title="Smazat" className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

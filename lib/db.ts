@@ -108,6 +108,29 @@ export async function saveLogToDB(log: Omit<WorkLog, 'id' | 'hours'>, bizId: str
   return res.json()
 }
 
+export async function updateLogInDB(
+  id: string,
+  patch: Partial<Pick<WorkLog, 'date' | 'clockIn' | 'clockOut' | 'notes'>>,
+  bizId: string,
+): Promise<WorkLog> {
+  if (!isRegistered(bizId)) {
+    const { updateWorkLog } = await import('./work-logs')
+    const updated = updateWorkLog(id, patch)
+    if (!updated) throw new Error('Záznam nenalezen')
+    return updated
+  }
+  const res = await fetch('/api/work-logs', {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ id, log: patch, bizId }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error ?? 'Chyba při úpravě záznamu')
+  }
+  return res.json()
+}
+
 export async function deleteLogFromDB(id: string, bizId: string): Promise<void> {
   if (!isRegistered(bizId)) {
     const { deleteWorkLog } = await import('./work-logs')

@@ -38,6 +38,17 @@ export function saveWorkLog(entry: Omit<WorkLog, 'id' | 'hours'>): WorkLog {
   return log
 }
 
+export function updateWorkLog(id: string, patch: Partial<Pick<WorkLog, 'date' | 'clockIn' | 'clockOut' | 'notes'>>): WorkLog | null {
+  const all = getWorkLogs()
+  const idx = all.findIndex(l => l.id === id)
+  if (idx === -1) return null
+  const merged = { ...all[idx], ...patch }
+  merged.hours = calcHours(merged.clockIn, merged.clockOut)
+  all[idx] = merged
+  localStorage.setItem(LS_KEY, JSON.stringify(all))
+  return merged
+}
+
 export function deleteWorkLog(id: string): void {
   const all = getWorkLogs().filter(l => l.id !== id)
   localStorage.setItem(LS_KEY, JSON.stringify(all))
