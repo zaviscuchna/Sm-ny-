@@ -11,7 +11,7 @@ import { isRegistered, getShiftsForBusiness, getEmployeesForBusiness, getLogsFor
 import type { Shift, User } from '@/types'
 import type { WorkLog } from '@/lib/work-logs'
 import {
-  Calculator, ChevronLeft, ChevronRight, Printer, Info, Pencil, Trash2, Check, X,
+  Calculator, ChevronLeft, ChevronRight, Printer, Info, Pencil, Trash2, Check, X, CheckCircle2, Circle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -39,6 +39,8 @@ export default function PayrollPage() {
   const [employees, setEmployees] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [detailUserId, setDetailUserId] = useState<string | null>(null)
+  const [paymentStatus, setPaymentStatus] = useState<Record<string, boolean>>({})
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   // Controls
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
@@ -50,21 +52,50 @@ export default function PayrollPage() {
   const loadData = useCallback(() => {
     if (!activeBusiness || !user) return
     setLoading(true)
-    Promise.all([
+    const promises: Promise<any>[] = [
       getShiftsForBusiness(activeBusiness.id, activeBranch?.id),
       isManager ? getEmployeesForBusiness(activeBusiness.id) : Promise.resolve([]),
       isManager
         ? getLogsForBusiness(activeBusiness.id, month)
         : getLogsForEmployee(user.id, activeBusiness.id),
-    ]).then(([s, e, logs]) => {
+    ]
+    if (isManager) {
+      promises.push(
+        fetch(`/api/payroll-payments?bizId=${activeBusiness.id}&month=${month}`)
+          .then(r => r.ok ? r.json() : {})
+          .catch(() => ({}))
+      )
+    }
+    Promise.all(promises).then(([s, e, logs, payments]) => {
       setShifts(s)
       setEmployees(e)
       setWorkLogs(logs)
+      if (isManager && payments) setPaymentStatus(payments)
     }).catch((err) => {
       console.error('Chyba při načítání dat:', err)
       toast.error('Nepodařilo se načíst data')
     }).finally(() => setLoading(false))
   }, [activeBusiness?.id, activeBranch?.id, user?.id, isManager, month])
+
+  const togglePayment = async (employeeId: string) => {
+    if (!activeBusiness) return
+    const newState = !paymentStatus[employeeId]
+    setTogglingId(employeeId)
+    try {
+      const res = await fetch('/api/payroll-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bizId: activeBusiness.id, employeeId, month, isPaid: newState }),
+      })
+      if (!res.ok) throw new Error()
+      setPaymentStatus(prev => ({ ...prev, [employeeId]: newState }))
+      toast.success(newState ? 'Označeno jako vyplaceno' : 'Označeno jako nevyplaceno')
+    } catch {
+      toast.error('Nepodařilo se změnit stav výplaty')
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -284,6 +315,9 @@ export default function PayrollPage() {
                       {rate > 0 && (
                         <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Výplata</th>
                       )}
+                      {isManager && (
+                        <th className="px-5 py-2.5 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wide print:hidden">Stav</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
@@ -309,6 +343,24 @@ export default function PayrollPage() {
                             {Math.round(d.hours * rate).toLocaleString('cs-CZ')} Kč
                           </td>
                         )}
+                        {isManager && (
+                          <td className="px-5 py-3 text-right print:hidden" onClick={e => e.stopPropagation()}>
+                            <button
+                              disabled={togglingId === d.user.id}
+                              onClick={() => togglePayment(d.user.id)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                                paymentStatus[d.user.id]
+                                  ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+                              } disabled:opacity-40`}
+                            >
+                              {paymentStatus[d.user.id]
+                                ? <><CheckCircle2 className="w-3.5 h-3.5" /> Vyplaceno</>
+                                : <><Circle className="w-3.5 h-3.5" /> Nevyplaceno</>
+                              }
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -326,6 +378,7 @@ export default function PayrollPage() {
                           {totalPay.toLocaleString('cs-CZ')} Kč
                         </td>
                       )}
+                      {isManager && <td className="print:hidden" />}
                     </tr>
                   </tfoot>
                 </table>
